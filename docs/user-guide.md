@@ -207,7 +207,7 @@ require("diffreel").set_layout(view, "stacked")
 require("diffreel").cycle_layout(view)
 ```
 
-Switching preserves selection, the real right buffer, unsaved text, Undo history, and configured LSP attachments. The Explorer remains independently configurable. Split proportions are remembered per layout; available screen space constrains sizes. A pending file selection finishes in the requested layout. An accepted layout switch cancels pending cross-file hunk navigation.
+Switching preserves selection, the real right buffer, unsaved text, Undo history, and configured LSP attachments. The Explorer remains independently configurable. Split proportions are remembered per layout and restored after editor resizing. Manual pane resizing sets the preferred proportion. Available screen space can constrain the actual sizes; expanding the editor restores the preferred proportion. This also works with a hidden explorer or numeric explorer dimensions. A pending file selection finishes in the requested layout. An accepted layout switch cancels pending cross-file hunk navigation.
 
 Inline shows the same editable worktree buffer used by split views. PR, commit and index endpoints remain read-only. Removed lines are decorations scoped to this review window: cursor movement, search, copying and editing operate on the right buffer only. The ordinary window displaying that buffer does not receive the decorations. Deleted text retains its tab alignment, and its gutter follows the review window’s number and sign-column settings.
 
@@ -236,6 +236,27 @@ require("diffreel").set_explorer(view, { position = "bottom", height = 8, mode =
 ```
 
 Positions are `left`, `right`, `top`, and `bottom`; `width` controls a vertical panel and `height` a horizontal panel. The existing top-level `width` remains the default vertical width. Hiding and repositioning preserve the selected file, pane buffers, drafts, folds, and scroll position. Layout changes do not request Git data. Native closure of a managed pane still releases a broken review; use the toggle to hide intentionally.
+
+Both dimensions accept a positive integer or a synchronous function that returns one:
+
+```lua
+require("diffreel").setup({
+  explorer = {
+    width = function(ctx) return math.max(22, math.floor(ctx.columns * 0.25)) end,
+    height = function(ctx) return math.max(1, math.floor(ctx.lines * 0.25)) end,
+  },
+})
+```
+
+`ctx.columns` and `ctx.lines` are the full editor dimensions in columns and rows. Return an integer from 1 to 2147483647; fractional values, percentage strings, and `nil` are invalid. Keep callbacks limited to calculations without changing editor state. Setup stores functions without calling them. Per-open settings and `set_explorer()` accept the same functions.
+
+Only the dimension used by the current position is evaluated: when first shown, when the position changes, when that dimension is explicitly supplied to `set_explorer()`, and when the editor resizes. Reapplying the same function recalculates its result. Changing list/tree mode, compaction, or only the other dimension does not invoke it.
+
+Without either width setting, the automatic width is 20% of the editor width rounded down and clamped to 22–35 columns; it also follows editor resizing. The default height is 10 rows. Calculated sizes remain constrained by available screen space. After a resize, an inactive review applies its new size when its tab is entered, and a hidden explorer applies it when shown.
+
+Native manual resizing is retained across hide/show until the relevant size setting changes or the editor resizes. An intervening resize expires that manual adjustment even if the editor returns to its previous dimensions while the explorer is hidden. Numeric sizes retain their manual adjustments and are not reset to the configured number on editor resize; use `set_explorer(nil, { width = 40 })` to explicitly restore a width.
+
+An invalid callback result or error prevents an explicit open/update before it changes the layout. Initially hidden explorers defer evaluation until shown. During automatic resizing, a failed calculation keeps the current layout usable, reports one notification per dimension until a successful calculation, and retries on later resizing or explicit updates. Diff panes retain their preferred split proportion through editor resizing even when the explorer size calculation fails, subject to native space limits.
 
 Command equivalents are `--list`, `--tree`, `--compact`, `--no-compact`, `--explorer`, `--no-explorer`, and `--explorer-position=bottom`. The position also accepts its value as the next argument. Per-open `explorer` fields override the configured defaults, and live updates are confined to the supplied view.
 

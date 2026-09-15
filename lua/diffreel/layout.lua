@@ -1,5 +1,53 @@
 local M = {}
 
+local function dimensions(view)
+  local getter = view.layout == "stacked" and vim.api.nvim_win_get_height or vim.api.nvim_win_get_width
+  return getter(view.left_win), getter(view.right_win)
+end
+
+function M.capture_ratio(view)
+  if view.layout == "inline" or view.layout_resize_pending then
+    return
+  end
+  local left, right = dimensions(view)
+  local previous = view.layout_size
+  if not previous or previous.mode ~= view.layout or previous.left ~= left or previous.right ~= right then
+    view.layout_ratios = view.layout_ratios or {}
+    view.layout_ratios[view.layout] = left / (left + right)
+    view.layout_size = { mode = view.layout, left = left, right = right }
+  end
+end
+
+function M.ratio(view)
+  M.capture_ratio(view)
+  return (view.layout_ratios or {})[view.layout] or 0.5
+end
+
+function M.balance(view, ratio)
+  if view.layout == "inline" or not view.alive then
+    return
+  end
+  local left, right = dimensions(view)
+  local target = math.max(1, math.min(left + right - 1, math.floor((left + right) * ratio + 0.5)))
+  if left ~= target then
+    local setter = view.layout == "stacked" and vim.api.nvim_win_set_height or vim.api.nvim_win_set_width
+    setter(view.left_win, target)
+  end
+  if not view.alive then
+    return
+  end
+  left, right = dimensions(view)
+  view.layout_ratios = view.layout_ratios or {}
+  view.layout_ratios[view.layout] = ratio
+  -- Recording rounded or constrained geometry as a new preference would drift on every resize.
+  view.layout_size = { mode = view.layout, left = left, right = right }
+end
+
+function M.resize(view)
+  M.balance(view, (view.layout_ratios or {})[view.layout] or 0.5)
+  view.layout_resize_pending = nil
+end
+
 function M.visible_windows(view)
   local wins = { view.right_win }
   if view.layout ~= "inline" then
@@ -118,9 +166,7 @@ function M.apply(view, mode)
   view.layout_ratios = view.layout_ratios or {}
   if previous ~= "inline" then
     require("diffreel.inline").capture_folds(view)
-    local getter = previous == "stacked" and vim.api.nvim_win_get_height or vim.api.nvim_win_get_width
-    local left_size = getter(view.left_win)
-    view.layout_ratios[previous] = left_size / (left_size + getter(right))
+    M.capture_ratio(view)
     view.saved_left_view = vim.api.nvim_win_call(view.left_win, vim.fn.winsaveview)
   end
   local old_engine, created = view.right_engine, nil
@@ -182,12 +228,7 @@ function M.apply(view, mode)
           presentation.apply(view, win, previous == "inline")
         end
       end
-      local getter = mode == "stacked" and vim.api.nvim_win_get_height or vim.api.nvim_win_get_width
-      local setter = mode == "stacked" and vim.api.nvim_win_set_height or vim.api.nvim_win_set_width
-      setter(
-        view.left_win,
-        math.max(1, math.floor((getter(view.left_win) + getter(right)) * (view.layout_ratios[mode] or 0.5)))
-      )
+      M.balance(view, view.layout_ratios[mode] or 0.5)
       if previous == "inline" and view.saved_left_view then
         vim.api.nvim_win_call(view.left_win, function()
           vim.fn.winrestview(view.saved_left_view)

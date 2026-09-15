@@ -1,5 +1,13 @@
 local M = {}
 
+function M.dimension(value, name)
+  assert(
+    type(value) == "number" and value > 0 and value <= 2147483647 and value % 1 == 0,
+    "diffreel: explorer." .. name .. " must be a positive integer"
+  )
+  return value
+end
+
 local function string_option(value, name, empty)
   assert(
     type(value) == "string" and not value:find("\0", 1, true) and (empty or value ~= ""),
@@ -29,10 +37,9 @@ function M.explorer(value, base)
   end
   for _, name in ipairs({ "width", "height" }) do
     local size = result[name]
-    assert(
-      size == nil or (type(size) == "number" and size > 0 and size <= 2147483647 and size % 1 == 0),
-      "diffreel: explorer." .. name .. " must be a positive integer"
-    )
+    if size ~= nil and type(size) ~= "function" then
+      M.dimension(size, name)
+    end
   end
   return result
 end
