@@ -728,10 +728,12 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     DiffreelDiffLineNr                         LineNr
     DiffreelDiffNormal                         Normal
     DiffreelDiffNormalNC                       NormalNC
-    DiffreelDiffWinBar                         WinBar
-    DiffreelDiffWinBarNC                       WinBarNC
-    DiffreelDiffWinSeparator                   WinSeparator
-    DiffreelDiffWinbarPath                     empty
+    DiffreelDiffWinBar                         Normal-derived background
+    DiffreelDiffWinBarNC                       DiffreelDiffWinBar
+    DiffreelDiffWinSeparator                   dimmed separator fg, Normal bg
+    DiffreelDiffWinbarDirectory                DiffreelDim
+    DiffreelDiffWinbarModified                 DiffreelModified
+    DiffreelDiffWinbarPath                     bold
     DiffreelDiffWinbarRevision                 DiffreelDim
     DiffreelDiffWinbarState                    DiffreelDim
     DiffreelDim                                Comment
@@ -744,17 +746,17 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     DiffreelExplorerBufferOnlyMarker           DiffreelExplorerBufferOnly
     DiffreelExplorerBufferOnlyName             DiffreelExplorerFileName
     DiffreelExplorerComparison                 DiffreelDim
-    DiffreelExplorerConflict                   empty
+    DiffreelExplorerConflict                   DiffreelModified
     DiffreelExplorerCursorLine                 CursorLine
     DiffreelExplorerDeleted                    DiffreelDeleted
     DiffreelExplorerDeletedIcon                DiffreelExplorerFileIcon
     DiffreelExplorerDeletedMarker              DiffreelExplorerDeleted
     DiffreelExplorerDeletedName                DiffreelExplorerFileName
-    DiffreelExplorerDetail                     empty
-    DiffreelExplorerDirectoryIcon              Directory
-    DiffreelExplorerDirectoryName              Directory
-    DiffreelExplorerEmpty                      empty
-    DiffreelExplorerError                      empty
+    DiffreelExplorerDetail                     DiffreelDim
+    DiffreelExplorerDirectoryIcon              DiffreelDim
+    DiffreelExplorerDirectoryName              DiffreelDim
+    DiffreelExplorerEmpty                      DiffreelDim
+    DiffreelExplorerError                      DiagnosticError
     DiffreelExplorerFileCount                  DiffreelDim
     DiffreelExplorerFileIcon                   empty
     DiffreelExplorerFileName                   empty
@@ -763,7 +765,7 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     DiffreelExplorerLimitedIcon                DiffreelExplorerFileIcon
     DiffreelExplorerLimitedMarker              DiffreelExplorerLimited
     DiffreelExplorerLimitedName                DiffreelExplorerFileName
-    DiffreelExplorerLoading                    empty
+    DiffreelExplorerLoading                    DiffreelDim
     DiffreelExplorerMetadata                   DiffreelModified
     DiffreelExplorerMetadataIcon               DiffreelExplorerFileIcon
     DiffreelExplorerMetadataMarker             DiffreelExplorerMetadata
@@ -776,20 +778,21 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     DiffreelExplorerModifiedIcon               DiffreelExplorerFileIcon
     DiffreelExplorerModifiedMarker             DiffreelExplorerModified
     DiffreelExplorerModifiedName               DiffreelExplorerFileName
-    DiffreelExplorerNormal                     Normal
-    DiffreelExplorerNormalNC                   NormalNC
-    DiffreelExplorerPaused                     empty
+    DiffreelExplorerNormal                     Normal-derived background
+    DiffreelExplorerNormalNC                   DiffreelExplorerNormal
+    DiffreelExplorerPaused                     DiffreelModified
     DiffreelExplorerRenamed                    DiffreelModified
     DiffreelExplorerRenamedIcon                DiffreelExplorerFileIcon
     DiffreelExplorerRenamedMarker              DiffreelExplorerRenamed
     DiffreelExplorerRenamedName                DiffreelExplorerFileName
-    DiffreelExplorerRootName                   Directory
+    DiffreelExplorerRootName                   bold
     DiffreelExplorerSelected                   DiffreelSelected
-    DiffreelExplorerStatsAdd                   empty
-    DiffreelExplorerStatsDelete                empty
-    DiffreelExplorerStatsPending               empty
-    DiffreelExplorerStatsUnavailable           empty
-    DiffreelExplorerSummary                    empty
+    DiffreelExplorerSelectedMarker             Directory
+    DiffreelExplorerStatsAdd                   DiffreelAdded
+    DiffreelExplorerStatsDelete                DiffreelDeleted
+    DiffreelExplorerStatsPending               DiffreelDim
+    DiffreelExplorerStatsUnavailable           DiffreelDim
+    DiffreelExplorerSummary                    DiffreelDim
     DiffreelExplorerTitle                      DiffreelTitle
     DiffreelExplorerTypeChange                 DiffreelModified
     DiffreelExplorerTypeChangeIcon             DiffreelExplorerFileIcon
@@ -803,35 +806,45 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     DiffreelExplorerUnknownIcon                DiffreelExplorerFileIcon
     DiffreelExplorerUnknownMarker              DiffreelExplorerUnknown
     DiffreelExplorerUnknownName                DiffreelExplorerFileName
-    DiffreelExplorerWinBar                     WinBar
-    DiffreelExplorerWinBarNC                   WinBarNC
-    DiffreelExplorerWinSeparator               WinSeparator
+    DiffreelExplorerWinBar                     Normal-derived background
+    DiffreelExplorerWinBarNC                   DiffreelExplorerWinBar
+    DiffreelExplorerWinSeparator               dimmed separator fg, Normal bg
     DiffreelFiller                             NonText/Comment fg, Normal bg
     DiffreelHelpAction                         empty
     DiffreelHelpBorder                         FloatBorder
-    DiffreelHelpHeader                         empty
-    DiffreelHelpHint                           empty
-    DiffreelHelpKey                            empty
+    DiffreelHelpHeader                         bold
+    DiffreelHelpHint                           DiffreelDim
+    DiffreelHelpKey                            Special
     DiffreelHelpNormal                         NormalFloat
     DiffreelHelpTitle                          FloatTitle
     DiffreelInlineDeleteNumber                 DiffreelLineDelete
-    DiffreelLineAdd                            DiffAdd background
-    DiffreelLineDelete                         DiffDelete background
+    DiffreelLineAdd                            blended DiffAdd background
+    DiffreelLineDelete                         blended DiffDelete background
     DiffreelModified                           DiagnosticWarn
     DiffreelPathBorder                         FloatBorder
     DiffreelPathNormal                         NormalFloat
     DiffreelPathText                           empty
     DiffreelPathTitle                          FloatTitle
-    DiffreelSelected                           Visual/CursorLine bg, bold
+    DiffreelSelected                           blended selection bg, bold
     DiffreelTextAdd                            derived addition background
     DiffreelTextDelete                         derived deletion background
-    DiffreelTitle                              Title
+    DiffreelTitle                              Normal fg, bold
 
-    Effective diff backgrounds account for reverse attributes. If missing,
-    LineAdd uses #1c394b and LineDelete #513351. Text background channel factors
-    are 1.4 (dark) or 0.92 (light), clamped to 255. They derive from theme
-    defaults independently of callback changes to line groups. Specify both
-    line and text groups to customize both shades.
+    Effective diff backgrounds account for reverse attributes. Missing theme
+    colors fall back to #1c394b for additions and #513351 for deletions.
+    Line backgrounds blend 45% of that color with 55% Normal background.
+    Text colors first scale the theme color by 1.4 (dark) or 0.92 (light),
+    clamped to 255, then blend 80% of it with 20% Normal background. Selected
+    rows blend 60% Visual/CursorLine background with 40% Normal background.
+    Panel/header surfaces blend 4% Normal foreground with 96% its background;
+    separators blend 25% WinSeparator foreground with 75% Normal background.
+    Without Normal foreground/background, chrome retains its native links;
+    without Normal background, diff/selection colors remain unblended.
+    These defaults derive independently of callback edits to other groups.
+    Specify both line and text groups to customize both shades.
+
+    Review windows use blank end-of-buffer and diff filler characters. The
+    original fillchars value is restored while still owned by diffreel.
 
 ==============================================================================
 5. LUA API                                                    *diffreel-api*

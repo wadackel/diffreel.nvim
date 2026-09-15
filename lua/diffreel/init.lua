@@ -143,7 +143,7 @@ local function title(view)
   end
   local left = view.comparison and view.comparison.left or view.spec.left
   local right = view.comparison and view.comparison.right or view.spec.right
-  left = left == ":0" and "index" or (left == "" and "empty" or left:sub(1, 10))
+  left = view.follow_head and "HEAD" or (left == ":0" and "index" or (left == "" and "empty" or left:sub(1, 10)))
   right = right == ":0" and "index" or (right == "" and "empty" or right:sub(1, 10))
   return left .. " → " .. right
 end
@@ -155,6 +155,16 @@ local function format_label(side)
   return (side.fileformat == "dos" and "CRLF" or "LF")
     .. (side.bom and " · BOM" or "")
     .. (side.endofline == false and " · no final newline" or "")
+end
+
+local function header_path(path)
+  local display = explorer.display(path):gsub("%%", "%%%%")
+  local directory, name = display:match("^(.*[/])([^/]*)$")
+  return " %<%#DiffreelDiffWinbarDirectory#"
+    .. (directory or "")
+    .. "%#DiffreelDiffWinbarPath#"
+    .. (name or display)
+    .. "%*"
 end
 
 local function render(view, cursor_path)
@@ -185,10 +195,18 @@ local function render(view, cursor_path)
     view.explorer_options
   )
   local count = #(view.entries or {})
+  local position_label = ""
+  for i, entry in ipairs(explorer.ordered(tree, view.explorer_options.mode)) do
+    if entry.path == view.selected_path then
+      position_label = i .. " / "
+      break
+    end
+  end
   presentation.header(
     view,
     view.explorer_win,
     " %#DiffreelExplorerTitle#Changes%*%=%#DiffreelExplorerFileCount#"
+      .. position_label
       .. count
       .. (count == 1 and " file " or " files ")
       .. "%*"
@@ -199,7 +217,7 @@ local function render(view, cursor_path)
   end
   local details = {}
   local function append(text, group)
-    lines[#lines + 1] = text
+    lines[#lines + 1] = " " .. text
     if group then
       details[#details + 1] = { row = #lines - 1, group = "DiffreelExplorer" .. group }
     end
@@ -316,6 +334,9 @@ local function render(view, cursor_path)
       if row.entry and row.path == view.selected_path then
         vim.api.nvim_buf_set_extmark(view.explorer_buf, namespace, i + 2, 0, {
           line_hl_group = "DiffreelExplorerSelected",
+          virt_text = { { vim.fn.strdisplaywidth("▎") == 1 and "▎" or ">", "DiffreelExplorerSelectedMarker" } },
+          virt_text_pos = "overlay",
+          hl_mode = "combine",
           priority = 20,
         })
       end
@@ -524,24 +545,18 @@ local function sync_buffer_state(view)
   local dirty = view.comparison.right == "worktree" and buf ~= view.empty_buf and vim.bo[buf].modified
   view.file_missing = entry.status == "missing" and not dirty
   view.disk_conflict = dirty and (entry.right.kind ~= "text" or buffer_hash(buf) ~= entry.right.content_id) or false
-  local display = explorer.display(view.selected_path):gsub("%%", "%%%%")
+  local path = header_path(view.selected_path)
   local left_revision = view.comparison.left == ":0" and "Index"
     or (view.comparison.left == "" and "Empty tree" or view.comparison.left:sub(1, 8))
   if view.follow_head then
     left_revision = "HEAD · " .. left_revision
   end
-  presentation.header(
-    view,
-    view.left_win,
-    " %#DiffreelDiffWinbarPath#%<" .. display .. "%*%=%#DiffreelDiffWinbarRevision# " .. left_revision .. " %*"
-  )
+  presentation.header(view, view.left_win, path .. "%=%#DiffreelDiffWinbarRevision# " .. left_revision .. " %*")
   if view.file_missing then
     presentation.header(
       view,
       view.left_win,
-      " %#DiffreelDiffWinbarPath#%<"
-        .. display
-        .. "%*%#DiffreelDiffWinbarState# · File is absent from both endpoints%*"
+      path .. "%#DiffreelDiffWinbarState# · File is absent from both endpoints%*"
     )
   end
   local detail = dirty
@@ -571,12 +586,13 @@ local function sync_buffer_state(view)
   presentation.header(
     view,
     view.right_win,
-    " %#DiffreelDiffWinbarPath#%<"
-      .. display
-      .. "%*%=%#DiffreelDiffWinbarRevision# "
+    path
+      .. "%=%#"
+      .. (dirty and "DiffreelDiffWinbarModified" or "DiffreelDiffWinbarRevision")
+      .. "# "
       .. right_revision
-      .. "%*%#DiffreelDiffWinbarState# · "
-      .. detail:gsub("%%", "%%%%")
+      .. "%*"
+      .. (detail == "LF" and "" or ("%#DiffreelDiffWinbarState# · " .. detail:gsub("%%", "%%%%")))
       .. " %*"
   )
 end

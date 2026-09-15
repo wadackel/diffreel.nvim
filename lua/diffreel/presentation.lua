@@ -8,6 +8,7 @@ function M.capture_window(win)
   for _, name in ipairs({
     "winhighlight",
     "winbar",
+    "fillchars",
     "number",
     "relativenumber",
     "wrap",
@@ -23,7 +24,7 @@ function M.capture_window(win)
     "foldexpr",
     "numberwidth",
   }) do
-    options[name] = vim.api.nvim_get_option_value(name, { win = win })
+    options[name] = vim.api.nvim_get_option_value(name, { win = win, scope = name == "fillchars" and "local" or nil })
   end
   return options
 end
@@ -42,7 +43,8 @@ local function option(view, win, name, value, reset)
   local options = view.presentation[win][buf]
   local current = vim.api.nvim_get_option_value(name, { win = win })
   if not options[name] then
-    local original = current
+    local original = name == "fillchars" and vim.api.nvim_get_option_value(name, { win = win, scope = "local" })
+      or current
     for other in pairs(owners) do
       for _, buffers in pairs(other.presentation or {}) do
         local state = buffers[buf] and buffers[buf][name]
@@ -88,6 +90,12 @@ function M.chrome(view, win, scope)
     end
   end
   option(view, win, "winhighlight", remap(vim.wo[win].winhighlight, replacements))
+  -- Parsing fillchars through vim.opt loses literal commas used as fill characters.
+  local fills, quiet = vim.wo[win].fillchars, scope == "Diff" and "eob: ,diff: " or "eob: "
+  if fills:sub(-#quiet) ~= quiet then
+    fills = fills .. (fills == "" and "" or ",") .. quiet
+  end
+  option(view, win, "fillchars", fills)
 end
 
 function M.diffthis(view, win)

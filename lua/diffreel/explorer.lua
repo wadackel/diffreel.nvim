@@ -250,7 +250,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
   end
   local rows = {}
   local function file_row(child, depth, list)
-    local prefix = string.rep("  ", depth)
+    local prefix = " " .. string.rep("  ", depth)
     local branch = not list and child.branch
     local marker = child.entry.buffer_only and "*" or statuses[child.entry.status] or "?"
     local icon, icon_group
@@ -330,7 +330,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
           label = label .. "/" .. child.name
           paths[#paths + 1] = child.path
         end
-        local prefix = string.rep("  ", depth)
+        local prefix = " " .. string.rep("  ", depth)
         local lead = prefix .. (collapsed[child.path] and "▸ " or "▾ ")
         local name = M.display(label)
         if width then

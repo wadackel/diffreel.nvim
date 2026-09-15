@@ -48,7 +48,7 @@ function probe.explorer_matches(view)
       or stats.additions ~= expected_stats.additions
       or stats.deletions ~= expected_stats.deletions
       or not vim.deep_equal(stats.files, expected_stats.files)
-      or lines[#view.rows + 5] ~= "Saved lines: +" .. expected_stats.additions .. " -" .. expected_stats.deletions
+      or lines[#view.rows + 5] ~= " Saved lines: +" .. expected_stats.additions .. " -" .. expected_stats.deletions
     then
       return false
     end
