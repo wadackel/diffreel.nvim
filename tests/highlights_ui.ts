@@ -42,12 +42,21 @@ async function main() {
   await git(root, "init", "-qb", "main");
   mkdir(join(root, "dir"));
   write(join(root, "dir/alpha.txt"), "same\nold value\n");
+  write(
+    join(root, "dir/filler.txt"),
+    "header\nremoved only\nseparator one\nold call\nold argument\nseparator two\nfooter\n",
+  );
   await git(root, "add", ".");
   await git(root, "commit", "-qm", "base");
   write(join(root, "dir/alpha.txt"), "same\nnew value\n");
+  write(
+    join(root, "dir/filler.txt"),
+    "header\nseparator one\nnew call\nseparator two\nadded first\nadded second\nfooter\n",
+  );
   const nvim = await Nvim.create(root, { columns: 145, rows: 35 });
   try {
     await nvim.lua(`
+      vim.opt.fillchars:append({diff='╱'})
       vim.api.nvim_set_hl(0,'DevIconFixture',{fg=0x123abc})
       package.preload['nvim-web-devicons']=function()
         return {get_icon=function() return 'I','DevIconFixture' end}
@@ -140,6 +149,76 @@ async function main() {
     await flush(nvim);
     assertEquals(style(nvim, "2-", "old value").foreground, 0x66ee88);
     nvim.capture(out, "inline");
+    await nvim.lua(`
+      plugin.setup({on_highlight=false})
+      plugin.select(v,'dir/filler.txt')
+    `);
+    await nvim.wait(
+      "return v.ready and v.selected_path=='dir/filler.txt' and not v.inline_pending or v.error",
+    );
+    assert(!await nvim.lua("return v.error"));
+    for (
+      const layout of ["side_by_side", "stacked", "inline", "side_by_side"]
+    ) {
+      await nvim.lua("plugin.set_layout(v,...)", layout);
+      await nvim.wait(
+        "return v.ready and not v.inline_pending or v.error",
+      );
+      assert(!await nvim.lua("return v.error"));
+      assertEquals(await nvim.lua("return v.layout"), layout);
+      await flush(nvim);
+      const groups = await nvim.lua(`
+        local groups={}
+        for _,name in ipairs({'DiffreelLineDelete','DiffreelLineAdd','DiffreelFiller'}) do
+          groups[name]=vim.api.nvim_get_hl(0,{name=name,link=false})
+        end
+        return groups
+      `);
+      assertEquals(
+        style(nvim, "removed only").background,
+        groups.DiffreelLineDelete.bg,
+      );
+      assertEquals(
+        style(nvim, "added first").background,
+        groups.DiffreelLineAdd.bg,
+      );
+      if (layout === "inline") {
+        assert(
+          !nvim.text().includes("╱"),
+          "Inline rendered native diff filler",
+        );
+      } else {
+        const windows = await nvim.lua(`
+          local result={}
+          for _,win in ipairs({v.left_win,v.right_win}) do
+            result[#result+1]={position=vim.api.nvim_win_get_position(win),
+              width=vim.api.nvim_win_get_width(win),height=vim.api.nvim_win_get_height(win)}
+          end
+          return result
+        `) as { position: [number, number]; width: number; height: number }[];
+        for (const { position: [top, left], width, height } of windows) {
+          const filler = (nvim.grids.get(1) ?? []).slice(top, top + height)
+            .flatMap((row) => row.slice(left, left + width))
+            .filter(([char]) => char === "╱");
+          assert(filler.length > 0, `Missing visible filler in ${layout}`);
+          for (const [, id] of filler) {
+            assertEquals(
+              nvim.highlights[id].foreground,
+              groups.DiffreelFiller.fg,
+            );
+            assertEquals(
+              nvim.highlights[id].background,
+              groups.DiffreelFiller.bg,
+            );
+            assert(
+              !nvim.highlights[id].reverse,
+              "Filler reversed the theme colors",
+            );
+          }
+        }
+      }
+      nvim.capture(out, "filler-" + layout);
+    }
     await nvim.lua(
       "vim.api.nvim_buf_set_lines(source,0,1,false,{'unsaved'});plugin.close(v);assert(vim.bo[source].modified);assert(vim.wo[ordinary].winhighlight=='Normal:FixtureNormal')",
     );

@@ -437,7 +437,15 @@ The pane headers emphasize the file name, dim its parent directories, and identi
 
 The explorer header shows the selected file's position, such as `2 / 12 files`, in the current tree or list order. A slim marker and a background highlight identify the selected file independently of the explorer cursor. HEAD-following reviews show `HEAD` in the explorer comparison; the revision pane retains the resolved commit ID.
 
-Neovim supplies diff alignment, hunk navigation, and synchronized folds. Line backgrounds blend with the current theme, while character-level changes use stronger colors. The explorer and pane headers share a subtle background. Transparent themes keep their native window backgrounds. Review windows use blank end-of-buffer and diff filler characters; other fill characters remain intact, and cleanup restores settings still owned by diffreel.
+Neovim supplies diff alignment, hunk navigation, and synchronized folds. The old pane uses deletion colors and the new pane uses addition colors. Line backgrounds blend with the current theme, while character-level changes use stronger colors. The explorer and pane headers share a subtle background. Transparent themes keep their native window backgrounds.
+
+In side-by-side and stacked layouts, filler rows align additions and deletions with the opposite pane. Their characters follow Neovim's `fillchars.diff` setting and use the subdued `DiffreelFiller` highlight. To display diagonal lines, add this to your Neovim configuration before opening a review:
+
+```lua
+vim.opt.fillchars:append({ diff = "╱" })
+```
+
+An explicit space keeps filler rows blank; when the character is unspecified, Neovim uses its default. Review windows hide end-of-buffer characters. Other fill characters remain intact, and cleanup restores settings still owned by diffreel.
 
 The explorer uses these comparison markers:
 

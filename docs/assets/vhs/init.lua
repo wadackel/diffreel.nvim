@@ -28,6 +28,7 @@ vim.o.expandtab = true
 vim.o.tabstop = 2
 vim.o.shiftwidth = 2
 vim.o.shortmess = "filnxtToOFc"
+vim.opt.fillchars:append({ diff = "╱" })
 vim.opt.diffopt = { "internal", "filler", "closeoff", "algorithm:histogram", "linematch:60", "context:30" }
 vim.g.mapleader = " "
 vim.cmd.colorscheme("dogrun")

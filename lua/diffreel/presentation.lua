@@ -91,7 +91,7 @@ function M.chrome(view, win, scope)
   end
   option(view, win, "winhighlight", remap(vim.wo[win].winhighlight, replacements))
   -- Parsing fillchars through vim.opt loses literal commas used as fill characters.
-  local fills, quiet = vim.wo[win].fillchars, scope == "Diff" and "eob: ,diff: " or "eob: "
+  local fills, quiet = vim.wo[win].fillchars, "eob: "
   if fills:sub(-#quiet) ~= quiet then
     fills = fills .. (fills == "" and "" or ",") .. quiet
   end
