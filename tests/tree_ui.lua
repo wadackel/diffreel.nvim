@@ -394,10 +394,7 @@ test("refresh preserves the explorer cursor column and non-entry rows", function
   plugin.refresh(view)
   ready(view)
   local footer = vim.api.nvim_win_get_cursor(view.explorer_win)
-  assert(
-    vim.trim(vim.api.nvim_buf_get_lines(view.explorer_buf, footer[1] - 1, footer[1], false)[1])
-      == "Unsaved buffer differs from disk"
-  )
+  assert(view.footer_rows[footer[1]].id == "conflict")
   assert(footer[2] == 5)
 end)
 

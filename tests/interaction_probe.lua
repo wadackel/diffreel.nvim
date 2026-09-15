@@ -60,7 +60,7 @@ vim.api.nvim_buf_set_extmark(
 )
 view.disk_conflict = true
 assert(not probe.explorer_matches(view), "Missing draft message was accepted")
-vim.api.nvim_buf_set_lines(buf, 5, -1, false, { " Unsaved buffer differs from disk" })
+vim.api.nvim_buf_set_lines(buf, 5, -1, false, { "  Unsaved buffer differs ", "  from disk" })
 assert(probe.explorer_matches(view))
 view.disk_conflict = false
 assert(not probe.explorer_matches(view), "Stale draft message was accepted")
@@ -78,7 +78,7 @@ view.rows[1].text = "  file.lua +2 -2 M"
 view.rows[1].marker_col = #view.rows[1].text - 1
 view.rows[1].highlights[1].first = view.rows[1].marker_col
 view.rows[1].highlights[1].last = #view.rows[1].text
-vim.api.nvim_buf_set_lines(buf, 3, -1, false, { view.rows[1].text, "", " Saved lines: +2 -2" })
+vim.api.nvim_buf_set_lines(buf, 3, -1, false, { view.rows[1].text, "", "  Saved lines: +2 -2" })
 vim.api.nvim_buf_set_extmark(
   buf,
   namespace,
@@ -91,9 +91,9 @@ assert(probe.explorer_matches(view), "Valid saved counts were rejected")
 view.statistics = vim.tbl_extend("force", view.statistics, { generation = 0 })
 assert(not probe.explorer_matches(view), "Stale-generation counts were accepted")
 view.statistics.generation = 1
-vim.api.nvim_buf_set_lines(buf, 5, 6, false, { " Saved lines: +99 -99" })
+vim.api.nvim_buf_set_lines(buf, 5, 6, false, { "  Saved lines: +99 -99" })
 assert(not probe.explorer_matches(view), "Incorrect totals were accepted")
-vim.api.nvim_buf_set_lines(buf, 5, 6, false, { " Saved lines: +2 -2" })
+vim.api.nvim_buf_set_lines(buf, 5, 6, false, { "  Saved lines: +2 -2" })
 assert(probe.explorer_matches(view), "Restored saved counts were rejected")
 view.statistics.files = { ["file.lua"] = { additions = 99, deletions = 99 } }
 assert(not probe.explorer_matches(view), "Incorrect per-file counts were accepted")

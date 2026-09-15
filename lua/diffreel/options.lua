@@ -142,6 +142,7 @@ end
 
 function M.normalize(opts, config)
   M.validate(opts)
+  assert(opts.ui_icons == nil, "diffreel: ui_icons is a setup() option")
   config = config or {}
   local function value(name, fallback)
     if opts[name] ~= nil then

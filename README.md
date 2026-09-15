@@ -51,7 +51,7 @@ These demos use [dogrun](https://github.com/wadackel/vim-dogrun) and [nvim-web-d
 | GitHub PR review | Authenticated GitHub CLI (`gh`); optional for local comparisons |
 | Path copying | A Neovim clipboard provider; optional for other features |
 
-Windows is not supported. File icons are optional and use `nvim-web-devicons` when it is installed. Default Git status icons use a Nerd Font; [customize the symbols](#customize-status-icons) for other fonts. LSP support uses your existing Neovim configuration.
+Windows is not supported. File icons are optional and use `nvim-web-devicons` when it is installed. Default UI and Git status icons use a Nerd Font; customize [UI icons](#customize-ui-icons) and [status icons](#customize-status-icons) for other fonts. LSP support uses your existing Neovim configuration.
 
 ## Install
 
@@ -214,6 +214,25 @@ require("diffreel").setup({
 ```
 
 Override only the symbols you want to change. See [status icons](docs/user-guide.md#status-icons) or `:help diffreel-status-icons` for all states and per-view settings.
+
+## Customize UI icons
+
+Headers identify repositories, revisions, the index and worktree with icons. Folder icons show open/closed state, and status messages and popup titles use the same visual vocabulary. Pane labels distinguish `Worktree` from `Unsaved`; the explorer shows the current file position as `2 / 3`.
+
+Use `ui_icons` to change individual symbols:
+
+```lua
+require("diffreel").setup({
+  ui_icons = {
+    repository = "R",
+    commit = "@",
+    directory_closed = ">",
+    directory_open = "v",
+  },
+})
+```
+
+Each review keeps the icons configured when it opens. See [UI icons](docs/user-guide.md#ui-icons) or `:help diffreel-ui-icons` for all symbols and a complete alternative for other fonts. Git status markers remain configurable through `explorer.status_icons`.
 
 ## Customize highlights
 

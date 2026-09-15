@@ -261,7 +261,7 @@ export async function api_edit(n: Nvim, _root: string) {
   );
   assert(
     await n.lua(
-      'return vim.wo[view.right_win].winbar:find("Unsaved buffer",1,true)~=nil',
+      'return vim.wo[view.right_win].winbar:find("Unsaved",1,true)~=nil',
     ),
   );
 }

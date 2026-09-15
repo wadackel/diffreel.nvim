@@ -16,6 +16,7 @@ local hunks = require("diffreel.hunks")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
 local inline = require("diffreel.inline")
+local ui = require("diffreel.ui")
 local M = { views = {}, managers = {}, config = { backend = "rust", watch = true, auto_install = true }, sequence = 0 }
 local namespace = vim.api.nvim_create_namespace("diffreel")
 local active_keymaps
@@ -138,15 +139,19 @@ end
 
 local function title(view)
   if view.pr then
-    return "PR #" .. view.pr.number .. " · " .. view.pr.state .. " · " .. explorer.display(view.pr.title)
+    return ui.label(
+      view.ui_icons,
+      "pull_request",
+      "PR #" .. view.pr.number .. " · " .. view.pr.state .. " · " .. explorer.display(view.pr.title)
+    )
   elseif view.pr_target then
-    return "PR " .. explorer.display(tostring(view.pr_target))
+    return ui.label(view.ui_icons, "pull_request", "PR " .. explorer.display(tostring(view.pr_target)))
   end
   local left = view.comparison and view.comparison.left or view.spec.left
   local right = view.comparison and view.comparison.right or view.spec.right
-  left = view.follow_head and "HEAD" or (left == ":0" and "index" or (left == "" and "empty" or left:sub(1, 10)))
-  right = right == ":0" and "index" or (right == "" and "empty" or right:sub(1, 10))
-  return left .. " → " .. right
+  local left_label = view.follow_head and ui.label(view.ui_icons, left == "" and "empty" or "commit", "HEAD")
+    or ui.endpoint(view.ui_icons, left, left:sub(1, 10))
+  return left_label .. " → " .. ui.endpoint(view.ui_icons, right, right:sub(1, 10))
 end
 
 local function format_label(side)
@@ -173,11 +178,13 @@ local function render(view, cursor_path)
     return
   end
   if view.error or not view.ready then
-    local label = view.error and ("Update stopped: " .. explorer.display(view.error)) or ("Loading " .. title(view))
+    local label = view.error and ui.label(view.ui_icons, "error", "Update stopped: " .. explorer.display(view.error))
+      or ui.label(view.ui_icons, "loading", "Loading " .. title(view))
+    local group = view.error and "DiffreelExplorerError" or "DiffreelDiffWinbarState"
     presentation.header(
       view,
       view.layout == "inline" and view.right_win or view.left_win,
-      " %#DiffreelDiffWinbarState#%<" .. label:gsub("%%", "%%%%") .. "%*"
+      " %#" .. group .. "#%<" .. ui.winbar(label) .. "%*"
     )
   end
   if not panel.visible(view) or view.layout_changing then
@@ -186,14 +193,21 @@ local function render(view, cursor_path)
   local position = vim.api.nvim_win_call(view.explorer_win, vim.fn.winsaveview)
   local old_rows = view.rows
   local old = old_rows and old_rows[position.lnum - 3]
-  local lines = { " " .. explorer.display(vim.fs.basename(view.root)), " " .. title(view), "" }
+  local footer_anchor = ui.anchor(view.footer_rows, position.lnum, position.col)
+  local width = vim.api.nvim_win_get_width(view.explorer_win)
+  local lines = {
+    " " .. ui.label(view.ui_icons, "repository", explorer.display(vim.fs.basename(view.root))),
+    " " .. title(view),
+    "",
+  }
   local rows, tree = explorer.rows(
     view.entries or {},
     view.collapsed,
-    vim.api.nvim_win_get_width(view.explorer_win),
+    width,
     view.tree,
     line_stats.files(view),
-    view.explorer_options
+    view.explorer_options,
+    view.ui_icons
   )
   local count = #(view.entries or {})
   local position_label = ""
@@ -206,27 +220,34 @@ local function render(view, cursor_path)
   presentation.header(
     view,
     view.explorer_win,
-    " %#DiffreelExplorerTitle#Changes%*%=%#DiffreelExplorerFileCount#"
+    " %#DiffreelExplorerTitle#"
+      .. ui.winbar(ui.label(view.ui_icons, "changes", "Changes"))
+      .. "%*%=%#DiffreelExplorerFileCount#"
       .. position_label
       .. count
-      .. (count == 1 and " file " or " files ")
-      .. "%*"
+      .. " %*"
   )
   view.rows, view.tree = rows, tree
   for _, row in ipairs(rows) do
     lines[#lines + 1] = row.text
   end
-  local details = {}
-  local function append(text, group)
-    lines[#lines + 1] = " " .. text
-    if group then
-      details[#details + 1] = { row = #lines - 1, group = "DiffreelExplorer" .. group }
+  local details, footer_rows = {}, {}
+  local function append(text, group, id, icon)
+    for _, part in ipairs(ui.wrap(icon and ui.label(view.ui_icons, icon, text) or text, width)) do
+      lines[#lines + 1] = part.text
+      part.id = id or group
+      footer_rows[#lines] = part
+      if group then
+        details[#details + 1] = { row = #lines - 1, group = "DiffreelExplorer" .. group }
+      end
     end
   end
   if #rows == 0 then
     append(
       view.error and "Update stopped" or (view.updating and "Loading…" or "No changes"),
-      view.error and "Error" or (view.updating and "Loading" or "Empty")
+      view.error and "Error" or (view.updating and "Loading" or "Empty"),
+      "empty",
+      view.error and "error" or (view.updating and "loading" or "clean")
     )
   end
   lines[#lines + 1] = ""
@@ -240,59 +261,66 @@ local function render(view, cursor_path)
           .. " -"
           .. stats.deletions
           .. ((stats.pending or stats.unavailable > 0 or stats.error) and " · partial" or ""),
-        "Summary"
+        "Summary",
+        "summary",
+        "changes"
       )
       if stats.error then
-        append("Line counts unavailable: " .. explorer.display(stats.error), "StatsUnavailable")
+        append(
+          "Line counts unavailable: " .. explorer.display(stats.error),
+          "StatsUnavailable",
+          "stats_error",
+          "warning"
+        )
       elseif selected then
         local value = stats.files[selected.path]
         local reason = selected.buffer_only and "unsaved-only file" or (value and value.reason)
         if reason then
-          append("Line counts: " .. explorer.display(reason), "StatsUnavailable")
+          append("Line counts: " .. explorer.display(reason), "StatsUnavailable", "stats_reason", "warning")
         end
       end
       if stats.pending then
-        append("Counting saved lines…", "StatsPending")
+        append("Counting saved lines…", "StatsPending", "stats_pending", "loading")
       end
     else
-      append("Counting saved lines…", "StatsPending")
+      append("Counting saved lines…", "StatsPending", "stats_pending", "loading")
     end
   end
   if selected and selected.git and selected.git.submodule_state then
     local state = selected.git.submodule_state
-    append("Submodule:", "Detail")
+    append("Submodule:", "Detail", "submodule")
     if state:sub(2, 2) == "C" then
-      append("  commit changed", "Detail")
+      append("  commit changed", "Detail", "submodule_commit")
     end
     if state:sub(3, 3) == "M" then
-      append("  tracked changes", "Detail")
+      append("  tracked changes", "Detail", "submodule_tracked")
     end
     if state:sub(4, 4) == "U" then
-      append("  untracked files", "Detail")
+      append("  untracked files", "Detail", "submodule_untracked")
     end
   end
   if selected and selected.left.exists and selected.right.exists then
     if selected.left.mode ~= selected.right.mode then
-      append("Mode: " .. selected.left.mode .. " → " .. selected.right.mode, "Detail")
+      append("Mode: " .. selected.left.mode .. " → " .. selected.right.mode, "Detail", "mode")
     end
     if
       selected.left.kind == "text"
       and selected.right.kind == "text"
       and format_label(selected.left) ~= format_label(selected.right)
     then
-      append(format_label(selected.left) .. " → " .. format_label(selected.right), "Detail")
+      append(format_label(selected.left) .. " → " .. format_label(selected.right), "Detail", "format")
     end
   end
   if view.error then
-    append("Update stopped: " .. explorer.display(view.error), "Error")
-    append("R: retry", "Error")
+    append("Update stopped: " .. explorer.display(view.error), "Error", "error", "error")
+    append("R: retry", "Error", "retry")
   elseif view.disk_conflict then
-    append("Unsaved buffer differs from disk", "Conflict")
+    append("Unsaved buffer differs from disk", "Conflict", "conflict", "warning")
   elseif view.navigation then
-    append("Comparison paused", "Paused")
-    append("Return to source or select a file", "Paused")
+    append("Paused", "Paused", "paused", "paused")
+    append("Return to source or select a file", "Paused", "paused_hint")
   elseif view.updating then
-    append("Updating…", "Loading")
+    append("Updating…", "Loading", "updating", "loading")
   end
   local rendered = view.explorer_render
   if
@@ -337,9 +365,18 @@ local function render(view, cursor_path)
       tick = vim.api.nvim_buf_get_changedtick(view.explorer_buf),
     }
   end
+  view.footer_rows = footer_rows
   local explicit = cursor_path or view.reveal_path
   local target = explorer.cursor_path(rows, explicit or (old and old.path) or view.selected_path)
-  if not explicit and old_rows and #old_rows > 0 and not old then
+  if not explicit and footer_anchor then
+    local row, col = ui.locate(footer_rows, footer_anchor)
+    row = row or math.min(#lines, math.max(#rows + 4, position.lnum + #rows - #old_rows))
+    position.topline = math.max(1, position.topline + row - position.lnum)
+    position.lnum, position.col = row, col or position.col
+    vim.api.nvim_win_call(view.explorer_win, function()
+      vim.fn.winrestview(position)
+    end)
+  elseif not explicit and old_rows and #old_rows > 0 and not old then
     if position.lnum > 3 then
       position.lnum = position.lnum + #rows - #old_rows
     end
@@ -534,17 +571,27 @@ local function sync_buffer_state(view)
   view.file_missing = entry.status == "missing" and not dirty
   view.disk_conflict = dirty and (entry.right.kind ~= "text" or buffer_hash(buf) ~= entry.right.content_id) or false
   local path = header_path(view.selected_path)
-  local left_revision = view.comparison.left == ":0" and "Index"
-    or (view.comparison.left == "" and "Empty tree" or view.comparison.left:sub(1, 8))
+  local left_revision = ui.endpoint(view.ui_icons, view.comparison.left)
   if view.follow_head then
-    left_revision = "HEAD · " .. left_revision
+    left_revision = ui.label(
+      view.ui_icons,
+      view.comparison.left == "" and "empty" or "commit",
+      "HEAD · " .. (view.comparison.left == "" and "Empty tree" or view.comparison.left:sub(1, 8))
+    )
   end
-  presentation.header(view, view.left_win, path .. "%=%#DiffreelDiffWinbarRevision# " .. left_revision .. " %*")
+  presentation.header(
+    view,
+    view.left_win,
+    path .. "%=%#DiffreelDiffWinbarRevision# " .. ui.winbar(left_revision) .. " %*"
+  )
   if view.file_missing then
     presentation.header(
       view,
       view.left_win,
-      path .. "%#DiffreelDiffWinbarState# · File is absent from both endpoints%*"
+      path
+        .. "%#DiffreelDiffWinbarState# · "
+        .. ui.winbar(ui.label(view.ui_icons, "warning", "File is absent from both endpoints"))
+        .. "%*"
     )
   end
   local detail = dirty
@@ -554,21 +601,19 @@ local function sync_buffer_state(view)
         endofline = vim.bo[buf].endofline,
       })
     or format_label(entry.right)
-  local right_revision = view.comparison.right == "worktree" and "Working tree"
-    or (
-      view.comparison.right == ":0" and "Index"
-      or (view.comparison.right == "" and "Empty tree" or view.comparison.right:sub(1, 8))
-    )
+  local right_revision = ui.endpoint(view.ui_icons, view.comparison.right)
   if dirty then
-    right_revision = "Unsaved buffer"
+    right_revision = ui.label(view.ui_icons, "unsaved", "Unsaved")
   end
   if view.layout == "inline" then
     local reason = entry.left.reason or entry.right.reason
     if reason then
-      right_revision = right_revision .. " · Not compared: " .. explorer.display(reason)
+      right_revision = right_revision
+        .. " · "
+        .. ui.label(view.ui_icons, "warning", "Not compared: " .. explorer.display(reason))
     end
     if view.file_missing then
-      right_revision = "File is absent from both endpoints"
+      right_revision = ui.label(view.ui_icons, "warning", "File is absent from both endpoints")
     end
   end
   presentation.header(
@@ -578,7 +623,7 @@ local function sync_buffer_state(view)
       .. "%=%#"
       .. (dirty and "DiffreelDiffWinbarModified" or "DiffreelDiffWinbarRevision")
       .. "# "
-      .. right_revision
+      .. ui.winbar(right_revision)
       .. "%*"
       .. (detail == "LF" and "" or ("%#DiffreelDiffWinbarState# · " .. detail:gsub("%%", "%%%%")))
       .. " %*"
@@ -1258,6 +1303,7 @@ function M.open(opts)
     assert(pinned_path and pinned_path ~= "", "diffreel: file must be inside the repository")
   end
   local default_explorer_width = M.config.width
+  local ui_icons = ui.resolve(M.config.ui_icons)
   local initial_sizing = panel.prepare(
     { explorer_options = opts.explorer, default_explorer_width = default_explorer_width },
     opts.explorer,
@@ -1323,6 +1369,7 @@ function M.open(opts)
     return_tab = return_tab,
     return_options = return_options,
     explorer_options = opts.explorer,
+    ui_icons = ui_icons,
     default_explorer_width = default_explorer_width,
     left_win = left,
     right_win = right,
@@ -1717,7 +1764,7 @@ function M.show_path(view, path)
   if not path or not view.tree or not view.tree.nodes[path] then
     return
   end
-  popup.open(view, "path_popup", " Full path ", {
+  popup.open(view, "path_popup", " " .. ui.label(view.ui_icons, "path", "Full path") .. " ", {
     explorer.display(view.root:gsub("/$", "") .. "/" .. path),
     "",
     "Close path: q / Esc / K",
@@ -2185,6 +2232,7 @@ function M.setup(opts)
   assert(type(opts) == "table", "diffreel: setup options must be a table")
   local config = vim.tbl_extend("force", M.config, opts)
   config.explorer = options.explorer(opts.explorer, M.config.explorer)
+  config.ui_icons = ui.resolve(opts.ui_icons, M.config.ui_icons)
   options.validate(config)
   assert(config.backend == "rust", "diffreel uses Rust; remove the legacy backend option")
   for _, name in ipairs({ "width", "max_bytes", "reconcile_ms" }) do

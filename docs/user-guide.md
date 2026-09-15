@@ -11,6 +11,7 @@ Start with the [README installation examples](../README.md#install). This guide 
 - [Integrate with events](#integrate-with-events)
 - [Tree navigation](#tree-navigation) and [path copying](#copy-paths)
 - [Customize keymaps](#customize-keymaps) and [highlights](#customize-highlights)
+- [UI icons](#ui-icons) and [status icons](#status-icons)
 - [Understand the review](#understand-the-review)
 - [Supported content](#supported-content)
 - [Installation and updates](#installation-and-updates)
@@ -316,6 +317,55 @@ require("diffreel").setup({
 
 Each value must be a nonempty string without control characters. Unknown keys and invalid values are rejected before changing configuration or a view. Multiple-character and wide symbols are supported; their display width is reserved when shortening file names and aligning the status column.
 
+### UI icons
+
+Headers use icons to identify repositories, commits, the index, the worktree and pull requests. The explorer's `Changes` header shows the selected position and total as `2 / 3`. Pane labels use `Worktree` for saved working-tree content and `Unsaved` for a modified buffer; HEAD-following comparisons retain `HEAD` and the resolved commit ID.
+
+Folders use different icons when open and closed, including rows that represent a compared file with descendants. Status messages pair icons with text: warnings and error causes remain explicit and wrap to the explorer's width, with a two-space continuation indent where space permits. When a message reflows, the cursor stays in the same message at the same text position. If that message disappears, the cursor stays within the remaining footer.
+
+`setup({ ui_icons = { … } })` accepts individual overrides:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `changes` | `` | Changes heading and saved-line summary |
+| `repository` | `` | Repository name |
+| `commit` | `` | Committed revision |
+| `index` | `` | Git index |
+| `worktree` | `` | Working tree |
+| `empty` | `∅` | Empty tree endpoint |
+| `pull_request` | `` | Pull request |
+| `unsaved` | `` | Unsaved buffer |
+| `directory_closed` | `󰉋` | Closed folder |
+| `directory_open` | `󰝰` | Open folder |
+| `loading` | `` | Loading, updating or counting |
+| `paused` | `` | Paused comparison |
+| `warning` | `` | Disk differences or limited content |
+| `error` | `` | Stopped update |
+| `clean` | `` | No changes |
+| `help` | `` | Key-list title |
+| `path` | `` | Full-path title |
+
+Keys merge into the current defaults. Each new view copies those defaults; later `setup()` calls leave existing views and their popups unchanged. This is a setup-only option. Git status markers use `explorer.status_icons`, and file-type icons still use the optional `nvim-web-devicons` provider.
+
+Values must be nonempty strings without control characters. Unknown keys and invalid values are rejected before changing configuration. Symbols may contain multiple or wide characters. Defaults use a Nerd Font; font support is not auto-detected. For a complete ASCII alternative:
+
+```lua
+require("diffreel").setup({
+  ui_icons = {
+    changes = "~", repository = "R", commit = "@", index = "I",
+    worktree = "W", empty = "0", pull_request = "PR", unsaved = "*",
+    directory_closed = ">", directory_open = "v", loading = "~",
+    paused = "||", warning = "!", error = "x", clean = "+",
+    help = "?", path = "/",
+  },
+  explorer = {
+    status_icons = { added = "+", modified = "~", deleted = "-", renamed = ">", missing = "0" },
+  },
+})
+```
+
+The key-list popup displays readable action labels such as `Next file` and `Copy relative path`; custom functions appear as `Custom action`. Configuration and the Lua API continue to use operation IDs such as `next_file` and `yank_path`.
+
 ### Tree navigation
 
 Tree operations use the cursor row, independently of the file displayed in the diff. They keep explorer focus and preserve the comparison, prepared buffers, and unsaved text. Folding does not request new Git status or file content.
@@ -479,7 +529,7 @@ A later `setup()` keeps the callback when `on_highlight` is omitted. Use `requir
 
 Standard calls such as `vim.api.nvim_set_hl(0, "DiffreelLineAdd", { bg = "#203040" })` also work. The callback reasserts its explicit definitions on the next setup or colorscheme change. For persistent customization across `:highlight clear`, use the callback or your colorscheme's own definitions.
 
-Names, icons, status markers, line counts, selection, headers, messages, diff decorations and popup elements have separate groups. `DiffreelExplorerAdded`, `Modified`, `Deleted`, `Renamed`, `Metadata`, `TypeChange`, `Limited`, `Missing`, `Unchanged`, `BufferOnly`, and `Unknown` each have `Name`, `Icon`, and `Marker` groups. Names retain ordinary text colors by default; markers link to their status base. A buffer-only row uses the `BufferOnly` family. Directory arrows use `DiffreelExplorerDirectoryIcon`, including file/directory collision branches.
+Names, icons, status markers, line counts, selection, headers, messages, diff decorations and popup elements have separate groups. `DiffreelExplorerAdded`, `Modified`, `Deleted`, `Renamed`, `Metadata`, `TypeChange`, `Limited`, `Missing`, `Unchanged`, `BufferOnly`, and `Unknown` each have `Name`, `Icon`, and `Marker` groups. Names retain ordinary text colors by default; markers link to their status base. A buffer-only row uses the `BufferOnly` family. Folder symbols use `DiffreelExplorerDirectoryIcon`, including file/directory collision branches. Other UI symbols share their label's highlight group.
 
 File icons retain `nvim-web-devicons` colors by default. Define `DiffreelExplorerFileIcon` to override all file icon colors, or a status-specific `Icon` group for that status. An explicit definition anywhere along the icon's link chain takes precedence over the provider, including an empty `{}` definition. Use the callback to clear an already-empty group such as `DiffreelExplorerFileIcon`: an identical direct `nvim_set_hl()` write cannot be distinguished from the installed default. After changing icon groups directly with `nvim_set_hl()`, call `require("diffreel").setup()` to update cached icon routing. This also works without devicons, but does not add icon glyphs when no provider supplies them.
 

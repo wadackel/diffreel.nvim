@@ -39,6 +39,11 @@ export async function scenario() {
       );
       assert(
         await nvim.lua(
+          "return vim.api.nvim_buf_get_lines(view.explorer_buf,1,2,false)[1]:find(' PR #1 · open · ',1,true)~=nil",
+        ),
+      );
+      assert(
+        await nvim.lua(
           "return vim.bo[view.right_buf].buftype=='nofile' and not vim.bo[view.right_buf].modifiable",
         ),
       );

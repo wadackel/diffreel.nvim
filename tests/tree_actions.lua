@@ -74,7 +74,7 @@ test("comparison entries with children remain selectable and collapsible", funct
   local tree = explorer.build(input)
   local row = visible(explorer.rows(input, folded, 30)).src
   assert(row.entry and row.branch and not row.directory)
-  assert(row.text:find("▾", 1, true))
+  assert(row.text:find("󰝰", 1, true))
   local child = visible(explorer.rows(input, folded, 30))["src/a.lua"]
   assert(
     vim.fn.strdisplaywidth(child.text:sub(1, child.name_col))
@@ -83,7 +83,7 @@ test("comparison entries with children remain selectable and collapsible", funct
   )
   explorer.act(tree, folded, "src", "collapse_node")
   local rows = explorer.rows(input, folded, 30)
-  assert(#rows == 1 and rows[1].entry == input[1] and rows[1].text:find("▸", 1, true))
+  assert(#rows == 1 and rows[1].entry == input[1] and rows[1].text:find("󰉋", 1, true))
   explorer.act(tree, folded, "src", "expand_recursive")
   assert(visible(explorer.rows(input, folded, 30))["src/nested/b.lua"])
 end)

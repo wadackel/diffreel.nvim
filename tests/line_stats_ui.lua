@@ -82,6 +82,7 @@ local ok, err = xpcall(function()
     vim.wait(1000, function()
       return table
         .concat(vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false), "\n")
+        :gsub("\n +", "")
         :find("Saved lines: +80 -40", 1, true)
     end, 5),
     "Statistics were not rendered"

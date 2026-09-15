@@ -124,8 +124,8 @@ async function main() {
     );
     await nvim.lua("plugin.show_help(v)");
     await flush(nvim);
-    assertEquals(style(nvim, "q", "close").foreground, 0x11ccee);
-    assertEquals(style(nvim, "close", "q").foreground, 0xeecc11);
+    assertEquals(style(nvim, "q", "Close review").foreground, 0x11ccee);
+    assertEquals(style(nvim, "Close review", "q").foreground, 0xeecc11);
     nvim.capture(out, "help");
     await nvim.lua("require('diffreel.popup').close(v); plugin.show_path(v)");
     await flush(nvim);

@@ -1,6 +1,7 @@
 local M = {}
 local highlights = require("diffreel.highlights")
 local options = require("diffreel.options")
+local ui = require("diffreel.ui")
 
 function M.display(text)
   local escapes = { ["\\"] = "\\\\", ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t" }
@@ -211,10 +212,11 @@ local function span(ranges, first, last, group, icon)
   end
 end
 
-function M.rows(entries, collapsed, width, tree, statistics, settings)
+function M.rows(entries, collapsed, width, tree, statistics, settings, ui_icons)
   settings = settings or {}
   local mode, compact = settings.mode or "tree", settings.compact or false
   local status_icons = options.status_icons(settings.status_icons)
+  local directory_open, directory_closed = ui.icon(ui_icons, "directory_open"), ui.icon(ui_icons, "directory_closed")
   local has_icons, icons = pcall(require, "nvim-web-devicons")
   tree = tree or M.build(entries)
   for path, closed in pairs(collapsed) do
@@ -234,6 +236,8 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     and rendered.statistics == statistics
     and rendered.icons == icon_source
     and vim.deep_equal(rendered.status_icons, status_icons)
+    and rendered.directory_open == directory_open
+    and rendered.directory_closed == directory_closed
     and vim.deep_equal(rendered.collapsed, collapsed)
     and vim.deep_equal(rendered.display, display)
     and icons_match(rendered.rows, icon_source)
@@ -250,7 +254,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     local marker_width = vim.fn.strdisplaywidth(marker)
     local icon, icon_group
     if branch then
-      icon = collapsed[child.path] and "▸" or "▾"
+      icon = collapsed[child.path] and directory_closed or directory_open
     elseif has_icons then
       icon, icon_group = icons.get_icon(child.name, nil, { default = true })
     end
@@ -335,7 +339,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
           paths[#paths + 1] = child.path
         end
         local prefix = " " .. string.rep("  ", depth)
-        local lead = prefix .. (collapsed[child.path] and "▸ " or "▾ ")
+        local lead = prefix .. (collapsed[child.path] and directory_closed or directory_open) .. " "
         local full_name = M.display(label)
         local name = full_name
         if width then
@@ -379,6 +383,8 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     statistics = statistics,
     icons = icon_source,
     status_icons = status_icons,
+    directory_open = directory_open,
+    directory_closed = directory_closed,
     display = display,
     collapsed = vim.deepcopy(collapsed),
     rows = rows,
