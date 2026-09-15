@@ -9,6 +9,9 @@ assert(
     and opts.explorer.height == 8
 )
 assert(opts.explorer.position == "left")
+assert(opts.explorer.full_name == true)
+assert(options.explorer({ full_name = false }).full_name == false)
+assert(options.explorer({}, { full_name = false }).full_name == false)
 opts.explorer.compact = false
 assert(input.explorer.compact)
 local parsed = options.parse({ "--list", "--compact", "--no-explorer", "--explorer-position=bottom", "--", "src" })
@@ -26,6 +29,7 @@ for _, value in ipairs({
   { width = math.huge },
   { visible = 1 },
   { compact = "yes" },
+  { full_name = "yes" },
   { unknown = true },
 }) do
   assert(not pcall(options.normalize, { explorer = value }, {}), vim.inspect(value))

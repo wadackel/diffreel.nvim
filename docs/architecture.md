@@ -269,6 +269,17 @@ removes accidental diff membership, and keeps the pane buffers. Rollback leaves
 the comparison available after a native layout failure. [popup.lua](../lua/diffreel/popup.lua)
 owns help and full-path floats, including partial-allocation cleanup.
 
+[full_name.lua](../lua/diffreel/full_name.lua) owns the nonfocusable cursor-row
+overlay. Explorer rows retain both shortened and full text with matching byte
+ranges; both surfaces share icon and selection highlighting. Updates coalesce
+after cursor restoration and recheck the focused view, row and screen geometry.
+The overlay accounts for the winbar, viewport and text offset, keeps its origin
+fixed, and caps its width at the screen edge. Horizontal scrolling and wrapping
+suppress it. Unchanged content and geometry reuse the window; closing the
+overlay retains its scratch buffer until view disposal. Its windows stay out
+of layout ownership, native diff and lifecycle checks triggered by their own
+closure. Disposal continues through the existing protected cleanup sequence.
+
 Explorer dimensions retain their configured number/function separately from
 saved native sizes and the last applied editor-resize generation for each axis.
 Panel preparation evaluates only the active dimension before layout mutation;
