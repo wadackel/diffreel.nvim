@@ -1,0 +1,149 @@
+{
+  "source_url": "https://github.com/rust-lang/cargo/pull/17465",
+  "api_sources": [
+    "https://api.github.com/repos/rust-lang/cargo/pulls/17465",
+    "https://api.github.com/repos/rust-lang/cargo/pulls/17465/files",
+    "https://api.github.com/repos/rust-lang/cargo/compare/e7506208ff1b7f01062e410c419f95628dfdb31b...872e334f993e4ba41bec0e06490884eba29333df"
+  ],
+  "observed_utc": "2026-09-14",
+  "case": "closed-unmerged",
+  "repository": "rust-lang/cargo",
+  "number": 17465,
+  "state": "closed",
+  "merged": false,
+  "closed_at": "2026-09-11T12:13:58Z",
+  "merged_at": null,
+  "base_sha": "e7506208ff1b7f01062e410c419f95628dfdb31b",
+  "head_sha": "872e334f993e4ba41bec0e06490884eba29333df",
+  "merge_commit_sha": "baded51c7284163a4c44518cca76344eb7c787d6",
+  "pr_commit_count": 1,
+  "pr_changed_files": 2,
+  "pr_files": [
+    {
+      "path": "src/sources/directory.rs",
+      "status": "modified",
+      "blob_oid": "d6cdec29ed19274e42911a35dba74ada257572dd",
+      "previous_path": null,
+      "additions": 3,
+      "deletions": 0,
+      "patch_sha256": "a54c3cabde36600b9030cb7a47f75dce0697c5084e6110ff6ba9362a40fa2811"
+    },
+    {
+      "path": "tests/testsuite/directory.rs",
+      "status": "modified",
+      "blob_oid": "d5bb53b46f9b530632ead493365ea0f4f861509b",
+      "previous_path": null,
+      "additions": 23,
+      "deletions": 0,
+      "patch_sha256": "ee5e3a9bd2e10e2fa46a131a2e3ceda3a49da876a9fc7205bf1f625b19e777f0"
+    }
+  ],
+  "comparison": {
+    "merge_base": "e7506208ff1b7f01062e410c419f95628dfdb31b",
+    "status": "ahead",
+    "total_commits": 1,
+    "files": [
+      {
+        "path": "src/sources/directory.rs",
+        "status": "modified",
+        "blob_oid": "d6cdec29ed19274e42911a35dba74ada257572dd",
+        "previous_path": null,
+        "additions": 3,
+        "deletions": 0,
+        "patch_sha256": "a54c3cabde36600b9030cb7a47f75dce0697c5084e6110ff6ba9362a40fa2811"
+      },
+      {
+        "path": "tests/testsuite/directory.rs",
+        "status": "modified",
+        "blob_oid": "d5bb53b46f9b530632ead493365ea0f4f861509b",
+        "previous_path": null,
+        "additions": 23,
+        "deletions": 0,
+        "patch_sha256": "ee5e3a9bd2e10e2fa46a131a2e3ceda3a49da876a9fc7205bf1f625b19e777f0"
+      }
+    ]
+  },
+  "exact_pr_compare_files_match": true,
+  "original_commits": [
+    {
+      "sha": "872e334f993e4ba41bec0e06490884eba29333df",
+      "parents": [
+        "e7506208ff1b7f01062e410c419f95628dfdb31b"
+      ],
+      "tree": "5fdd70ce214f165f52b131533cfa61e7ff26b282",
+      "files": [
+        {
+          "path": "src/sources/directory.rs",
+          "status": "modified",
+          "blob_oid": "d6cdec29ed19274e42911a35dba74ada257572dd",
+          "previous_path": null,
+          "additions": 3,
+          "deletions": 0,
+          "patch_sha256": "a54c3cabde36600b9030cb7a47f75dce0697c5084e6110ff6ba9362a40fa2811"
+        },
+        {
+          "path": "tests/testsuite/directory.rs",
+          "status": "modified",
+          "blob_oid": "d5bb53b46f9b530632ead493365ea0f4f861509b",
+          "previous_path": null,
+          "additions": 23,
+          "deletions": 0,
+          "patch_sha256": "ee5e3a9bd2e10e2fa46a131a2e3ceda3a49da876a9fc7205bf1f625b19e777f0"
+        }
+      ]
+    }
+  ],
+  "merge_commit": {
+    "sha": "baded51c7284163a4c44518cca76344eb7c787d6",
+    "parents": [
+      "e7506208ff1b7f01062e410c419f95628dfdb31b",
+      "872e334f993e4ba41bec0e06490884eba29333df"
+    ],
+    "tree": "5fdd70ce214f165f52b131533cfa61e7ff26b282",
+    "files": [
+      {
+        "path": "src/sources/directory.rs",
+        "status": "modified",
+        "blob_oid": "d6cdec29ed19274e42911a35dba74ada257572dd",
+        "previous_path": null,
+        "additions": 3,
+        "deletions": 0,
+        "patch_sha256": "a54c3cabde36600b9030cb7a47f75dce0697c5084e6110ff6ba9362a40fa2811"
+      },
+      {
+        "path": "tests/testsuite/directory.rs",
+        "status": "modified",
+        "blob_oid": "d5bb53b46f9b530632ead493365ea0f4f861509b",
+        "previous_path": null,
+        "additions": 23,
+        "deletions": 0,
+        "patch_sha256": "ee5e3a9bd2e10e2fa46a131a2e3ceda3a49da876a9fc7205bf1f625b19e777f0"
+      }
+    ]
+  },
+  "result_chain": [],
+  "current_base": {
+    "sha": "175537e6698a02940dd181ffcd466a46e5d73b57",
+    "status_from_saved_base": "ahead",
+    "ahead_by": 9,
+    "behind_by": 0
+  },
+  "endpoint_blobs": {
+    "merge_base": {
+      "commit": "e7506208ff1b7f01062e410c419f95628dfdb31b",
+      "tree_truncated": false,
+      "blobs": {
+        "src/sources/directory.rs": "4fa5c00dc5b06ddc98af163f9199f1016f204435",
+        "tests/testsuite/directory.rs": "b9daba0efcade3d60a6ea4d21aa6f4b27b901d97"
+      }
+    },
+    "head": {
+      "commit": "872e334f993e4ba41bec0e06490884eba29333df",
+      "tree_truncated": false,
+      "blobs": {
+        "src/sources/directory.rs": "d6cdec29ed19274e42911a35dba74ada257572dd",
+        "tests/testsuite/directory.rs": "d5bb53b46f9b530632ead493365ea0f4f861509b"
+      }
+    }
+  }
+}

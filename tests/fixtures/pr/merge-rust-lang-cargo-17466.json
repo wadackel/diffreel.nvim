@@ -1,0 +1,111 @@
+{
+  "source_url": "https://github.com/rust-lang/cargo/pull/17466",
+  "api_sources": [
+    "https://api.github.com/repos/rust-lang/cargo/pulls/17466",
+    "https://api.github.com/repos/rust-lang/cargo/pulls/17466/files",
+    "https://api.github.com/repos/rust-lang/cargo/compare/e7506208ff1b7f01062e410c419f95628dfdb31b...41cbc0b0d487d6afea7b701d0003b0bdf12be100"
+  ],
+  "observed_utc": "2026-09-14",
+  "case": "merge",
+  "repository": "rust-lang/cargo",
+  "number": 17466,
+  "state": "closed",
+  "merged": true,
+  "closed_at": "2026-09-11T13:54:36Z",
+  "merged_at": "2026-09-11T13:54:36Z",
+  "base_sha": "e7506208ff1b7f01062e410c419f95628dfdb31b",
+  "head_sha": "41cbc0b0d487d6afea7b701d0003b0bdf12be100",
+  "merge_commit_sha": "fa45a177bd4ca038a9290643bac3b08c41953a28",
+  "pr_commit_count": 1,
+  "pr_changed_files": 1,
+  "pr_files": [
+    {
+      "path": "tests/testsuite/feature_unification.rs",
+      "status": "modified",
+      "blob_oid": "2c582a7b1c906bd9d91dfe85dfed465cab5b9ced",
+      "previous_path": null,
+      "additions": 578,
+      "deletions": 0,
+      "patch_sha256": "b4317bd74418fa088bff3af23c36cbac5a4ec7688307817787ac54e5dc87914c"
+    }
+  ],
+  "comparison": {
+    "merge_base": "42eee92bc9aa4449f4e25d84e4ceb1cf8e0f87f9",
+    "status": "diverged",
+    "total_commits": 1,
+    "files": [
+      {
+        "path": "tests/testsuite/feature_unification.rs",
+        "status": "modified",
+        "blob_oid": "2c582a7b1c906bd9d91dfe85dfed465cab5b9ced",
+        "previous_path": null,
+        "additions": 578,
+        "deletions": 0,
+        "patch_sha256": "b4317bd74418fa088bff3af23c36cbac5a4ec7688307817787ac54e5dc87914c"
+      }
+    ]
+  },
+  "exact_pr_compare_files_match": true,
+  "original_commits": [
+    {
+      "sha": "41cbc0b0d487d6afea7b701d0003b0bdf12be100",
+      "parents": [
+        "42eee92bc9aa4449f4e25d84e4ceb1cf8e0f87f9"
+      ],
+      "tree": "d15ff84125c6b97032100cbf77fd7b865d9d0a2a",
+      "files": [
+        {
+          "path": "tests/testsuite/feature_unification.rs",
+          "status": "modified",
+          "blob_oid": "2c582a7b1c906bd9d91dfe85dfed465cab5b9ced",
+          "previous_path": null,
+          "additions": 578,
+          "deletions": 0,
+          "patch_sha256": "b4317bd74418fa088bff3af23c36cbac5a4ec7688307817787ac54e5dc87914c"
+        }
+      ]
+    }
+  ],
+  "merge_commit": {
+    "sha": "fa45a177bd4ca038a9290643bac3b08c41953a28",
+    "parents": [
+      "e7506208ff1b7f01062e410c419f95628dfdb31b",
+      "41cbc0b0d487d6afea7b701d0003b0bdf12be100"
+    ],
+    "tree": "c630778c8ba37a6b13448ca48e4bb88ac0a96577",
+    "files": [
+      {
+        "path": "tests/testsuite/feature_unification.rs",
+        "status": "modified",
+        "blob_oid": "2c582a7b1c906bd9d91dfe85dfed465cab5b9ced",
+        "previous_path": null,
+        "additions": 578,
+        "deletions": 0,
+        "patch_sha256": "b4317bd74418fa088bff3af23c36cbac5a4ec7688307817787ac54e5dc87914c"
+      }
+    ]
+  },
+  "result_chain": [],
+  "current_base": {
+    "sha": "175537e6698a02940dd181ffcd466a46e5d73b57",
+    "status_from_saved_base": "ahead",
+    "ahead_by": 9,
+    "behind_by": 0
+  },
+  "endpoint_blobs": {
+    "merge_base": {
+      "commit": "42eee92bc9aa4449f4e25d84e4ceb1cf8e0f87f9",
+      "tree_truncated": false,
+      "blobs": {
+        "tests/testsuite/feature_unification.rs": "9d91b4802bcc56ea87f1c6d4f9ee5e8bc6ca5e88"
+      }
+    },
+    "head": {
+      "commit": "41cbc0b0d487d6afea7b701d0003b0bdf12be100",
+      "tree_truncated": false,
+      "blobs": {
+        "tests/testsuite/feature_unification.rs": "2c582a7b1c906bd9d91dfe85dfed465cab5b9ced"
+      }
+    }
+  }
+}

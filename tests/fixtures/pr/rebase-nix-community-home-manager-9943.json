@@ -1,0 +1,378 @@
+{
+  "source_url": "https://github.com/nix-community/home-manager/pull/9943",
+  "api_sources": [
+    "https://api.github.com/repos/nix-community/home-manager/pulls/9943",
+    "https://api.github.com/repos/nix-community/home-manager/pulls/9943/files",
+    "https://api.github.com/repos/nix-community/home-manager/compare/73d6a67161df12bfbf327afc2b8e065174f46258...f75cb933c4aca64039900673f9a35a1c91563775"
+  ],
+  "observed_utc": "2026-09-14",
+  "case": "rebase",
+  "repository": "nix-community/home-manager",
+  "number": 9943,
+  "state": "closed",
+  "merged": true,
+  "closed_at": "2026-09-13T04:16:51Z",
+  "merged_at": "2026-09-13T04:16:51Z",
+  "base_sha": "73d6a67161df12bfbf327afc2b8e065174f46258",
+  "head_sha": "f75cb933c4aca64039900673f9a35a1c91563775",
+  "merge_commit_sha": "fdc36b12804b0179b24a5ffd282e4c95c37072e2",
+  "pr_commit_count": 3,
+  "pr_changed_files": 4,
+  "pr_files": [
+    {
+      "path": "docs/manual/contributing/guidelines.md",
+      "status": "modified",
+      "blob_oid": "a7b4f971855b2b978512cd4191a45102af6af710",
+      "previous_path": null,
+      "additions": 35,
+      "deletions": 0,
+      "patch_sha256": "5fc2f040a1a91421d8e9baad857eb0dca78a84e3f573615b9be9e23c495e54a2"
+    },
+    {
+      "path": "modules/lib/deprecations.nix",
+      "status": "modified",
+      "blob_oid": "67d0df6d77183eaaa5f0241a4e3b710a0b4a46e8",
+      "previous_path": null,
+      "additions": 552,
+      "deletions": 140,
+      "patch_sha256": "2c76b572ef6077313dc56b51e49d7df0ab21509cdb037fbe439465d20cdaa689"
+    },
+    {
+      "path": "tests/lib/deprecations/default.nix",
+      "status": "modified",
+      "blob_oid": "513dc9c1bd2687340a38d1273c624fa991ec30d9",
+      "previous_path": null,
+      "additions": 1,
+      "deletions": 0,
+      "patch_sha256": "c9f12756e730191c4919ebb45ea1924c1dea2a9eb464b6a9266251bf18d4b648"
+    },
+    {
+      "path": "tests/lib/deprecations/settings-migrations.nix",
+      "status": "added",
+      "blob_oid": "d5078bc6c00ff81b5881e90196f59019420ee7e4",
+      "previous_path": null,
+      "additions": 251,
+      "deletions": 0,
+      "patch_sha256": "904f2cd56630d74d49fdc9f00df6a8e585837ccdd710d4ffdda1be81b05d3cc3"
+    }
+  ],
+  "comparison": {
+    "merge_base": "fe48612c5321a2cc09b0f563757a9c9733d641f8",
+    "status": "diverged",
+    "total_commits": 3,
+    "files": [
+      {
+        "path": "docs/manual/contributing/guidelines.md",
+        "status": "modified",
+        "blob_oid": "a7b4f971855b2b978512cd4191a45102af6af710",
+        "previous_path": null,
+        "additions": 35,
+        "deletions": 0,
+        "patch_sha256": "5fc2f040a1a91421d8e9baad857eb0dca78a84e3f573615b9be9e23c495e54a2"
+      },
+      {
+        "path": "modules/lib/deprecations.nix",
+        "status": "modified",
+        "blob_oid": "67d0df6d77183eaaa5f0241a4e3b710a0b4a46e8",
+        "previous_path": null,
+        "additions": 552,
+        "deletions": 140,
+        "patch_sha256": "2c76b572ef6077313dc56b51e49d7df0ab21509cdb037fbe439465d20cdaa689"
+      },
+      {
+        "path": "tests/lib/deprecations/default.nix",
+        "status": "modified",
+        "blob_oid": "513dc9c1bd2687340a38d1273c624fa991ec30d9",
+        "previous_path": null,
+        "additions": 1,
+        "deletions": 0,
+        "patch_sha256": "c9f12756e730191c4919ebb45ea1924c1dea2a9eb464b6a9266251bf18d4b648"
+      },
+      {
+        "path": "tests/lib/deprecations/settings-migrations.nix",
+        "status": "added",
+        "blob_oid": "d5078bc6c00ff81b5881e90196f59019420ee7e4",
+        "previous_path": null,
+        "additions": 251,
+        "deletions": 0,
+        "patch_sha256": "904f2cd56630d74d49fdc9f00df6a8e585837ccdd710d4ffdda1be81b05d3cc3"
+      }
+    ]
+  },
+  "exact_pr_compare_files_match": true,
+  "original_commits": [
+    {
+      "sha": "191799717a006e0e2cb5d22dfdc6e153a40f8725",
+      "parents": [
+        "fe48612c5321a2cc09b0f563757a9c9733d641f8"
+      ],
+      "tree": "34b2b7eb3f5c42f83b20c752d3e4f902ccc6e507",
+      "files": [
+        {
+          "path": "modules/lib/deprecations.nix",
+          "status": "modified",
+          "blob_oid": "bc31827086185177b84a3dcaec932beb23eb1d3f",
+          "previous_path": null,
+          "additions": 44,
+          "deletions": 1,
+          "patch_sha256": "38ce8a3885a4454f214761297d5847e04db465244bb86b2b0ca93a73f348b445"
+        },
+        {
+          "path": "tests/lib/deprecations/default.nix",
+          "status": "modified",
+          "blob_oid": "581c59c90baf18e7700ec94a7576c2f9db9bb5e2",
+          "previous_path": null,
+          "additions": 1,
+          "deletions": 0,
+          "patch_sha256": "13c460eb71ff95dbc44d714355dfac6db04b061b6c696923765ab6974a7d148a"
+        },
+        {
+          "path": "tests/lib/deprecations/ordered-settings-rename.nix",
+          "status": "added",
+          "blob_oid": "fec80b00ca75deef986df2639c64824366ce728c",
+          "previous_path": null,
+          "additions": 33,
+          "deletions": 0,
+          "patch_sha256": "e9774ca8062ca2917f31ac2236e03545986cb5083c828ea92c946d9aa87875a7"
+        }
+      ]
+    },
+    {
+      "sha": "54f9c82a57cf4fdc27d46b33241ac75fb0ae2002",
+      "parents": [
+        "191799717a006e0e2cb5d22dfdc6e153a40f8725"
+      ],
+      "tree": "84e1e77a595a257eebad408cff09712e3c21cd0f",
+      "files": [
+        {
+          "path": "docs/manual/contributing/guidelines.md",
+          "status": "modified",
+          "blob_oid": "a7b4f971855b2b978512cd4191a45102af6af710",
+          "previous_path": null,
+          "additions": 35,
+          "deletions": 0,
+          "patch_sha256": "5fc2f040a1a91421d8e9baad857eb0dca78a84e3f573615b9be9e23c495e54a2"
+        },
+        {
+          "path": "modules/lib/deprecations.nix",
+          "status": "modified",
+          "blob_oid": "710ccdbfdd0dfd7e0fddfa704704eed5b747442e",
+          "previous_path": null,
+          "additions": 85,
+          "deletions": 24,
+          "patch_sha256": "4ccd7dfdd5db0a4749ebaf250b8f7ddb09c5204bba4fafd047b4facef9dfdf6d"
+        },
+        {
+          "path": "tests/lib/deprecations/default.nix",
+          "status": "modified",
+          "blob_oid": "513dc9c1bd2687340a38d1273c624fa991ec30d9",
+          "previous_path": null,
+          "additions": 1,
+          "deletions": 1,
+          "patch_sha256": "60a7b8de116725e2cee099274922f4e8f14c4f4c8e8b227400a312eec1308fdd"
+        },
+        {
+          "path": "tests/lib/deprecations/ordered-settings-rename.nix",
+          "status": "removed",
+          "blob_oid": "fec80b00ca75deef986df2639c64824366ce728c",
+          "previous_path": null,
+          "additions": 0,
+          "deletions": 33,
+          "patch_sha256": "44376313226e0e5f7feb75df98df4ca3d65c4b484abafc8540b2e04a86803c86"
+        },
+        {
+          "path": "tests/lib/deprecations/settings-migrations.nix",
+          "status": "added",
+          "blob_oid": "d5078bc6c00ff81b5881e90196f59019420ee7e4",
+          "previous_path": null,
+          "additions": 251,
+          "deletions": 0,
+          "patch_sha256": "904f2cd56630d74d49fdc9f00df6a8e585837ccdd710d4ffdda1be81b05d3cc3"
+        }
+      ]
+    },
+    {
+      "sha": "f75cb933c4aca64039900673f9a35a1c91563775",
+      "parents": [
+        "54f9c82a57cf4fdc27d46b33241ac75fb0ae2002"
+      ],
+      "tree": "c8fad869a04374100f2ec047fa17c43f1f08798c",
+      "files": [
+        {
+          "path": "modules/lib/deprecations.nix",
+          "status": "modified",
+          "blob_oid": "67d0df6d77183eaaa5f0241a4e3b710a0b4a46e8",
+          "previous_path": null,
+          "additions": 459,
+          "deletions": 151,
+          "patch_sha256": "6e72e30b184f7822dd4befb61ae8e0e70801fb75a0514330b290f6d0c399809a"
+        }
+      ]
+    }
+  ],
+  "merge_commit": {
+    "sha": "fdc36b12804b0179b24a5ffd282e4c95c37072e2",
+    "parents": [
+      "bdcb842903a4d080626673874bf252fc93237f4e"
+    ],
+    "tree": "d74a4de85f78fe6616c34f6561c511de82f5b178",
+    "files": [
+      {
+        "path": "modules/lib/deprecations.nix",
+        "status": "modified",
+        "blob_oid": "67d0df6d77183eaaa5f0241a4e3b710a0b4a46e8",
+        "previous_path": null,
+        "additions": 459,
+        "deletions": 151,
+        "patch_sha256": "6e72e30b184f7822dd4befb61ae8e0e70801fb75a0514330b290f6d0c399809a"
+      }
+    ]
+  },
+  "result_chain": [
+    {
+      "sha": "e16bc72cbb33f8101b11874b1621d9b1fe8075b0",
+      "parents": [
+        "8597ac635c67d742846485bc76307c679e8516c0"
+      ],
+      "tree": "0c1c2d77680b8b6f53fbbd65784e24f013ce7dd4",
+      "files": [
+        {
+          "path": "modules/lib/deprecations.nix",
+          "status": "modified",
+          "blob_oid": "bc31827086185177b84a3dcaec932beb23eb1d3f",
+          "previous_path": null,
+          "additions": 44,
+          "deletions": 1,
+          "patch_sha256": "38ce8a3885a4454f214761297d5847e04db465244bb86b2b0ca93a73f348b445"
+        },
+        {
+          "path": "tests/lib/deprecations/default.nix",
+          "status": "modified",
+          "blob_oid": "581c59c90baf18e7700ec94a7576c2f9db9bb5e2",
+          "previous_path": null,
+          "additions": 1,
+          "deletions": 0,
+          "patch_sha256": "13c460eb71ff95dbc44d714355dfac6db04b061b6c696923765ab6974a7d148a"
+        },
+        {
+          "path": "tests/lib/deprecations/ordered-settings-rename.nix",
+          "status": "added",
+          "blob_oid": "fec80b00ca75deef986df2639c64824366ce728c",
+          "previous_path": null,
+          "additions": 33,
+          "deletions": 0,
+          "patch_sha256": "e9774ca8062ca2917f31ac2236e03545986cb5083c828ea92c946d9aa87875a7"
+        }
+      ]
+    },
+    {
+      "sha": "bdcb842903a4d080626673874bf252fc93237f4e",
+      "parents": [
+        "e16bc72cbb33f8101b11874b1621d9b1fe8075b0"
+      ],
+      "tree": "60f854418abec2f4383d713f545f4b37a7cc0cfa",
+      "files": [
+        {
+          "path": "docs/manual/contributing/guidelines.md",
+          "status": "modified",
+          "blob_oid": "a7b4f971855b2b978512cd4191a45102af6af710",
+          "previous_path": null,
+          "additions": 35,
+          "deletions": 0,
+          "patch_sha256": "5fc2f040a1a91421d8e9baad857eb0dca78a84e3f573615b9be9e23c495e54a2"
+        },
+        {
+          "path": "modules/lib/deprecations.nix",
+          "status": "modified",
+          "blob_oid": "710ccdbfdd0dfd7e0fddfa704704eed5b747442e",
+          "previous_path": null,
+          "additions": 85,
+          "deletions": 24,
+          "patch_sha256": "4ccd7dfdd5db0a4749ebaf250b8f7ddb09c5204bba4fafd047b4facef9dfdf6d"
+        },
+        {
+          "path": "tests/lib/deprecations/default.nix",
+          "status": "modified",
+          "blob_oid": "513dc9c1bd2687340a38d1273c624fa991ec30d9",
+          "previous_path": null,
+          "additions": 1,
+          "deletions": 1,
+          "patch_sha256": "60a7b8de116725e2cee099274922f4e8f14c4f4c8e8b227400a312eec1308fdd"
+        },
+        {
+          "path": "tests/lib/deprecations/ordered-settings-rename.nix",
+          "status": "removed",
+          "blob_oid": "fec80b00ca75deef986df2639c64824366ce728c",
+          "previous_path": null,
+          "additions": 0,
+          "deletions": 33,
+          "patch_sha256": "44376313226e0e5f7feb75df98df4ca3d65c4b484abafc8540b2e04a86803c86"
+        },
+        {
+          "path": "tests/lib/deprecations/settings-migrations.nix",
+          "status": "added",
+          "blob_oid": "d5078bc6c00ff81b5881e90196f59019420ee7e4",
+          "previous_path": null,
+          "additions": 251,
+          "deletions": 0,
+          "patch_sha256": "904f2cd56630d74d49fdc9f00df6a8e585837ccdd710d4ffdda1be81b05d3cc3"
+        }
+      ]
+    },
+    {
+      "sha": "fdc36b12804b0179b24a5ffd282e4c95c37072e2",
+      "parents": [
+        "bdcb842903a4d080626673874bf252fc93237f4e"
+      ],
+      "tree": "d74a4de85f78fe6616c34f6561c511de82f5b178",
+      "files": [
+        {
+          "path": "modules/lib/deprecations.nix",
+          "status": "modified",
+          "blob_oid": "67d0df6d77183eaaa5f0241a4e3b710a0b4a46e8",
+          "previous_path": null,
+          "additions": 459,
+          "deletions": 151,
+          "patch_sha256": "6e72e30b184f7822dd4befb61ae8e0e70801fb75a0514330b290f6d0c399809a"
+        }
+      ]
+    }
+  ],
+  "current_base": {
+    "sha": "dd0b74e2b53eb6aa03fe120fcc00a4d37cc288f8",
+    "status_from_saved_base": "ahead",
+    "ahead_by": 13,
+    "behind_by": 0
+  },
+  "endpoint_blobs": {
+    "merge_base": {
+      "commit": "fe48612c5321a2cc09b0f563757a9c9733d641f8",
+      "tree_truncated": false,
+      "blobs": {
+        "docs/manual/contributing/guidelines.md": "2bf17aa67e047da1152b061ee46fbb8597f93e96",
+        "modules/lib/deprecations.nix": "7132ad0a551a6da7f062605d36e74f754d66f0cd",
+        "tests/lib/deprecations/default.nix": "068f130ac5cf90e91e1e9cba460f3ac05508f616"
+      }
+    },
+    "head": {
+      "commit": "f75cb933c4aca64039900673f9a35a1c91563775",
+      "tree_truncated": false,
+      "blobs": {
+        "docs/manual/contributing/guidelines.md": "a7b4f971855b2b978512cd4191a45102af6af710",
+        "modules/lib/deprecations.nix": "67d0df6d77183eaaa5f0241a4e3b710a0b4a46e8",
+        "tests/lib/deprecations/default.nix": "513dc9c1bd2687340a38d1273c624fa991ec30d9",
+        "tests/lib/deprecations/settings-migrations.nix": "d5078bc6c00ff81b5881e90196f59019420ee7e4"
+      }
+    }
+  },
+  "rebase_evidence": {
+    "same_commit_count": true,
+    "all_oids_rewritten": true,
+    "each_commit_files_and_patch_equal": [
+      true,
+      true,
+      true
+    ],
+    "linear_result_chain": true
+  }
+}

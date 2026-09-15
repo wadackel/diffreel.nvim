@@ -1,0 +1,331 @@
+{
+  "source_url": "https://github.com/cli/cli/pull/14430",
+  "api_sources": [
+    "https://api.github.com/repos/cli/cli/pulls/14430",
+    "https://api.github.com/repos/cli/cli/pulls/14430/files",
+    "https://api.github.com/repos/cli/cli/compare/7f0590c2b8050bb04c5af52291062e6825dda9df...63db15cae4f7a344e203afa30b2df5ab2d98956d"
+  ],
+  "observed_utc": "2026-09-14",
+  "case": "squash",
+  "repository": "cli/cli",
+  "number": 14430,
+  "state": "closed",
+  "merged": true,
+  "closed_at": "2026-09-11T18:06:18Z",
+  "merged_at": "2026-09-11T18:06:18Z",
+  "base_sha": "7f0590c2b8050bb04c5af52291062e6825dda9df",
+  "head_sha": "63db15cae4f7a344e203afa30b2df5ab2d98956d",
+  "merge_commit_sha": "ba51bb47799e308109a980fca846a90d164f5811",
+  "pr_commit_count": 2,
+  "pr_changed_files": 5,
+  "pr_files": [
+    {
+      "path": "docs/multiple-accounts.md",
+      "status": "modified",
+      "blob_oid": "6431a59472fa7e4af1209b6f3b38af4014c834f3",
+      "previous_path": null,
+      "additions": 5,
+      "deletions": 0,
+      "patch_sha256": "d6571e1b8e58d74d29aa66c6211fd115515fd1cbc37fe55f2c7dd09642593d07"
+    },
+    {
+      "path": "internal/config/auth_config_test.go",
+      "status": "modified",
+      "blob_oid": "ea2ccff126c85b10e1644498036213c24c581711",
+      "previous_path": null,
+      "additions": 10,
+      "deletions": 10,
+      "patch_sha256": "5734b7547c9dbd97ab1cbd61d1f745bc3d8da773640f52cb03f888813dfbae0f"
+    },
+    {
+      "path": "internal/config/migration/multi_account.go",
+      "status": "modified",
+      "blob_oid": "905674873ff5ad36f2b7890a3752ded3f81ccb37",
+      "previous_path": null,
+      "additions": 13,
+      "deletions": 4,
+      "patch_sha256": "04e9c6c2e79ee33192368efaac797ae07e0423090eb642b5012e8ee04252707d"
+    },
+    {
+      "path": "internal/config/migration/multi_account_test.go",
+      "status": "modified",
+      "blob_oid": "0cefff1ad3a19017f6292d90ca046a5f8fa50b64",
+      "previous_path": null,
+      "additions": 11,
+      "deletions": 11,
+      "patch_sha256": "6ad4cb5851e0c9f00737fdcd6fae6b1cf397ea0d528d02e05645534502e2ed34"
+    },
+    {
+      "path": "internal/ghcmd/cmd.go",
+      "status": "modified",
+      "blob_oid": "b7fa73a378111baaa16c4ab2ce30bdd3702606ea",
+      "previous_path": null,
+      "additions": 0,
+      "deletions": 9,
+      "patch_sha256": "ef33887ee1019e6adff6ce4d36333f0836e55e79c209b73031ab45a89b812819"
+    }
+  ],
+  "comparison": {
+    "merge_base": "7f0590c2b8050bb04c5af52291062e6825dda9df",
+    "status": "ahead",
+    "total_commits": 2,
+    "files": [
+      {
+        "path": "docs/multiple-accounts.md",
+        "status": "modified",
+        "blob_oid": "6431a59472fa7e4af1209b6f3b38af4014c834f3",
+        "previous_path": null,
+        "additions": 5,
+        "deletions": 0,
+        "patch_sha256": "d6571e1b8e58d74d29aa66c6211fd115515fd1cbc37fe55f2c7dd09642593d07"
+      },
+      {
+        "path": "internal/config/auth_config_test.go",
+        "status": "modified",
+        "blob_oid": "ea2ccff126c85b10e1644498036213c24c581711",
+        "previous_path": null,
+        "additions": 10,
+        "deletions": 10,
+        "patch_sha256": "5734b7547c9dbd97ab1cbd61d1f745bc3d8da773640f52cb03f888813dfbae0f"
+      },
+      {
+        "path": "internal/config/migration/multi_account.go",
+        "status": "modified",
+        "blob_oid": "905674873ff5ad36f2b7890a3752ded3f81ccb37",
+        "previous_path": null,
+        "additions": 13,
+        "deletions": 4,
+        "patch_sha256": "04e9c6c2e79ee33192368efaac797ae07e0423090eb642b5012e8ee04252707d"
+      },
+      {
+        "path": "internal/config/migration/multi_account_test.go",
+        "status": "modified",
+        "blob_oid": "0cefff1ad3a19017f6292d90ca046a5f8fa50b64",
+        "previous_path": null,
+        "additions": 11,
+        "deletions": 11,
+        "patch_sha256": "6ad4cb5851e0c9f00737fdcd6fae6b1cf397ea0d528d02e05645534502e2ed34"
+      },
+      {
+        "path": "internal/ghcmd/cmd.go",
+        "status": "modified",
+        "blob_oid": "b7fa73a378111baaa16c4ab2ce30bdd3702606ea",
+        "previous_path": null,
+        "additions": 0,
+        "deletions": 9,
+        "patch_sha256": "ef33887ee1019e6adff6ce4d36333f0836e55e79c209b73031ab45a89b812819"
+      }
+    ]
+  },
+  "exact_pr_compare_files_match": true,
+  "original_commits": [
+    {
+      "sha": "5fe0f89e1352262a2542a0e840a3c7e2a660a9da",
+      "parents": [
+        "7f0590c2b8050bb04c5af52291062e6825dda9df"
+      ],
+      "tree": "c90d08dbfb53281eedc25cb5b81edc22d64ce781",
+      "files": [
+        {
+          "path": "internal/config/auth_config_test.go",
+          "status": "modified",
+          "blob_oid": "ea2ccff126c85b10e1644498036213c24c581711",
+          "previous_path": null,
+          "additions": 10,
+          "deletions": 10,
+          "patch_sha256": "5734b7547c9dbd97ab1cbd61d1f745bc3d8da773640f52cb03f888813dfbae0f"
+        },
+        {
+          "path": "internal/config/migration/multi_account.go",
+          "status": "modified",
+          "blob_oid": "905674873ff5ad36f2b7890a3752ded3f81ccb37",
+          "previous_path": null,
+          "additions": 13,
+          "deletions": 4,
+          "patch_sha256": "04e9c6c2e79ee33192368efaac797ae07e0423090eb642b5012e8ee04252707d"
+        },
+        {
+          "path": "internal/config/migration/multi_account_test.go",
+          "status": "modified",
+          "blob_oid": "0cefff1ad3a19017f6292d90ca046a5f8fa50b64",
+          "previous_path": null,
+          "additions": 11,
+          "deletions": 11,
+          "patch_sha256": "6ad4cb5851e0c9f00737fdcd6fae6b1cf397ea0d528d02e05645534502e2ed34"
+        },
+        {
+          "path": "internal/ghcmd/cmd.go",
+          "status": "modified",
+          "blob_oid": "b7fa73a378111baaa16c4ab2ce30bdd3702606ea",
+          "previous_path": null,
+          "additions": 0,
+          "deletions": 9,
+          "patch_sha256": "ef33887ee1019e6adff6ce4d36333f0836e55e79c209b73031ab45a89b812819"
+        }
+      ]
+    },
+    {
+      "sha": "63db15cae4f7a344e203afa30b2df5ab2d98956d",
+      "parents": [
+        "5fe0f89e1352262a2542a0e840a3c7e2a660a9da"
+      ],
+      "tree": "435ad5496233a3eb797edc6ed780c46cf237c78b",
+      "files": [
+        {
+          "path": "docs/multiple-accounts.md",
+          "status": "modified",
+          "blob_oid": "6431a59472fa7e4af1209b6f3b38af4014c834f3",
+          "previous_path": null,
+          "additions": 5,
+          "deletions": 0,
+          "patch_sha256": "d6571e1b8e58d74d29aa66c6211fd115515fd1cbc37fe55f2c7dd09642593d07"
+        }
+      ]
+    }
+  ],
+  "merge_commit": {
+    "sha": "ba51bb47799e308109a980fca846a90d164f5811",
+    "parents": [
+      "8fcd6a643f993ee12b70ad0edeab741ed133c9f1"
+    ],
+    "tree": "ee1ea58248f483d47e4e791ba01649a03700780a",
+    "files": [
+      {
+        "path": "docs/multiple-accounts.md",
+        "status": "modified",
+        "blob_oid": "6431a59472fa7e4af1209b6f3b38af4014c834f3",
+        "previous_path": null,
+        "additions": 5,
+        "deletions": 0,
+        "patch_sha256": "d6571e1b8e58d74d29aa66c6211fd115515fd1cbc37fe55f2c7dd09642593d07"
+      },
+      {
+        "path": "internal/config/auth_config_test.go",
+        "status": "modified",
+        "blob_oid": "ea2ccff126c85b10e1644498036213c24c581711",
+        "previous_path": null,
+        "additions": 10,
+        "deletions": 10,
+        "patch_sha256": "5734b7547c9dbd97ab1cbd61d1f745bc3d8da773640f52cb03f888813dfbae0f"
+      },
+      {
+        "path": "internal/config/migration/multi_account.go",
+        "status": "modified",
+        "blob_oid": "905674873ff5ad36f2b7890a3752ded3f81ccb37",
+        "previous_path": null,
+        "additions": 13,
+        "deletions": 4,
+        "patch_sha256": "04e9c6c2e79ee33192368efaac797ae07e0423090eb642b5012e8ee04252707d"
+      },
+      {
+        "path": "internal/config/migration/multi_account_test.go",
+        "status": "modified",
+        "blob_oid": "0cefff1ad3a19017f6292d90ca046a5f8fa50b64",
+        "previous_path": null,
+        "additions": 11,
+        "deletions": 11,
+        "patch_sha256": "6ad4cb5851e0c9f00737fdcd6fae6b1cf397ea0d528d02e05645534502e2ed34"
+      },
+      {
+        "path": "internal/ghcmd/cmd.go",
+        "status": "modified",
+        "blob_oid": "b7fa73a378111baaa16c4ab2ce30bdd3702606ea",
+        "previous_path": null,
+        "additions": 0,
+        "deletions": 9,
+        "patch_sha256": "ef33887ee1019e6adff6ce4d36333f0836e55e79c209b73031ab45a89b812819"
+      }
+    ]
+  },
+  "result_chain": [
+    {
+      "sha": "ba51bb47799e308109a980fca846a90d164f5811",
+      "parents": [
+        "8fcd6a643f993ee12b70ad0edeab741ed133c9f1"
+      ],
+      "tree": "ee1ea58248f483d47e4e791ba01649a03700780a",
+      "files": [
+        {
+          "path": "docs/multiple-accounts.md",
+          "status": "modified",
+          "blob_oid": "6431a59472fa7e4af1209b6f3b38af4014c834f3",
+          "previous_path": null,
+          "additions": 5,
+          "deletions": 0,
+          "patch_sha256": "d6571e1b8e58d74d29aa66c6211fd115515fd1cbc37fe55f2c7dd09642593d07"
+        },
+        {
+          "path": "internal/config/auth_config_test.go",
+          "status": "modified",
+          "blob_oid": "ea2ccff126c85b10e1644498036213c24c581711",
+          "previous_path": null,
+          "additions": 10,
+          "deletions": 10,
+          "patch_sha256": "5734b7547c9dbd97ab1cbd61d1f745bc3d8da773640f52cb03f888813dfbae0f"
+        },
+        {
+          "path": "internal/config/migration/multi_account.go",
+          "status": "modified",
+          "blob_oid": "905674873ff5ad36f2b7890a3752ded3f81ccb37",
+          "previous_path": null,
+          "additions": 13,
+          "deletions": 4,
+          "patch_sha256": "04e9c6c2e79ee33192368efaac797ae07e0423090eb642b5012e8ee04252707d"
+        },
+        {
+          "path": "internal/config/migration/multi_account_test.go",
+          "status": "modified",
+          "blob_oid": "0cefff1ad3a19017f6292d90ca046a5f8fa50b64",
+          "previous_path": null,
+          "additions": 11,
+          "deletions": 11,
+          "patch_sha256": "6ad4cb5851e0c9f00737fdcd6fae6b1cf397ea0d528d02e05645534502e2ed34"
+        },
+        {
+          "path": "internal/ghcmd/cmd.go",
+          "status": "modified",
+          "blob_oid": "b7fa73a378111baaa16c4ab2ce30bdd3702606ea",
+          "previous_path": null,
+          "additions": 0,
+          "deletions": 9,
+          "patch_sha256": "ef33887ee1019e6adff6ce4d36333f0836e55e79c209b73031ab45a89b812819"
+        }
+      ]
+    }
+  ],
+  "current_base": {
+    "sha": "ba51bb47799e308109a980fca846a90d164f5811",
+    "status_from_saved_base": "ahead",
+    "ahead_by": 2,
+    "behind_by": 0
+  },
+  "endpoint_blobs": {
+    "merge_base": {
+      "commit": "7f0590c2b8050bb04c5af52291062e6825dda9df",
+      "tree_truncated": false,
+      "blobs": {
+        "docs/multiple-accounts.md": "29c83b703599f7158acad35040147e06e6c36206",
+        "internal/config/auth_config_test.go": "32884758b69c733df2fe0c392044174fe524e266",
+        "internal/config/migration/multi_account.go": "209912781dadee46d17afbe10a2c371dcad721ba",
+        "internal/config/migration/multi_account_test.go": "8feb853bdef1591dfedf6bcb0896005977b411b3",
+        "internal/ghcmd/cmd.go": "eb0343896335bbeed6e332f40d682d08f0fb4a00"
+      }
+    },
+    "head": {
+      "commit": "63db15cae4f7a344e203afa30b2df5ab2d98956d",
+      "tree_truncated": false,
+      "blobs": {
+        "docs/multiple-accounts.md": "6431a59472fa7e4af1209b6f3b38af4014c834f3",
+        "internal/config/auth_config_test.go": "ea2ccff126c85b10e1644498036213c24c581711",
+        "internal/config/migration/multi_account.go": "905674873ff5ad36f2b7890a3752ded3f81ccb37",
+        "internal/config/migration/multi_account_test.go": "0cefff1ad3a19017f6292d90ca046a5f8fa50b64",
+        "internal/ghcmd/cmd.go": "b7fa73a378111baaa16c4ab2ce30bdd3702606ea"
+      }
+    }
+  },
+  "squash_evidence": {
+    "original_commits": 2,
+    "result_parent_count": 1,
+    "result_files_match_pr": true
+  }
+}

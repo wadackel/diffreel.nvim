@@ -1,0 +1,1054 @@
+*diffreel.txt*  Review changing Git worktrees in Neovim
+
+Author: wadackel
+License: MIT
+Repository: https://github.com/wadackel/diffreel.nvim
+
+==============================================================================
+CONTENTS                                                       *diffreel*
+
+    1. Getting started ........................ |diffreel-start|
+    2. Commands ............................... |diffreel-commands|
+    3. Navigation ............................. |diffreel-mappings|
+    4. Configuration .......................... |diffreel-config|
+    5. Lua API ................................ |diffreel-api|
+    6. Events ................................. |diffreel-events|
+    7. Content and recovery ................... |diffreel-content|
+
+==============================================================================
+1. GETTING STARTED                                             *diffreel-start*
+
+diffreel opens a file explorer and a native diff in a review tab. Supported
+working-tree files use real buffers, preserving normal editing and configured
+LSP behavior. External disk changes do not overwrite unsaved buffer text.
+
+Requirements: Neovim 0.12+, Git 2.55+, and either macOS 14+ or Linux, on arm64
+or x86_64. Windows is not supported. File icons optionally use
+nvim-web-devicons.
+LSP support depends on your existing language server configuration.
+
+Install with lazy.nvim or |vim.pack| using the README examples. Source and
+binary downloads need no GitHub authentication. Daemon downloads require curl
+on Neovim's PATH. A prepared cache requires no network or compiler.
+GitHub CLI authentication is needed only for |diffreel-pr|.
+
+From a Git worktree containing changes: >vim
+    Diffreel
+<
+Use <Tab> in the explorer to select the next file. Use <Leader>e to move to the
+right pane and edit normally. Use q in a review pane to close the review.
+Unsaved real buffers remain available after closing.
+
+The first review prepares the Rust daemon asynchronously. Preparation may
+include downloading it. |:DiffreelInstall| can prepare it ahead of time.
+Restart Neovim after updating the plugin or its configured daemon.
+
+For worked examples and installation details, see docs/user-guide.md in the
+repository. This file is the reference for commands, options, and Lua APIs.
+
+==============================================================================
+2. COMMANDS                                                  *diffreel-commands*
+
+:Diffreel [options] [left] [right] [-- pathspec ...]               *:Diffreel*
+    With no arguments, close the current review tab or open HEAD against the
+    worktree. Explicit arguments always open a new review tab.
+
+    The left endpoint defaults to HEAD; the right defaults to worktree.
+    Either endpoint can be a Git revision expression or :0 (the index); only
+    the right can be the literal worktree. At most two revisions are accepted.
+    Index panes are read-only; this command never changes the index.
+
+    A literal HEAD on the left with worktree or :0 on the right follows new HEAD
+    commits, even when passed explicitly. Other revision expressions resolve
+    once and remain fixed through refresh and daemon restart. To freeze the
+    current HEAD, pass its resolved commit ID instead of the string HEAD.
+
+    Examples: >vim
+        Diffreel HEAD~1
+        Diffreel main worktree
+        Diffreel HEAD~1 HEAD
+        Diffreel --staged
+        Diffreel --unstaged -- src
+        Diffreel main...feature
+        Diffreel --stat --exclude=**/*.lock -- src tests
+        Diffreel --selected-file=src/main.lua
+<
+    Options:                                             *diffreel-command-options*
+        --staged, --cached  Compare HEAD (or one supplied revision) with :0
+        --unstaged          Compare :0 with worktree; accepts no revisions
+        --merge-base        Use merge-base(left, right), or HEAD for worktree
+        --stat, --no-stat   Enable/disable saved line counts for this view
+        --untracked=all|no  Include/omit new untracked paths
+        --no-untracked      Same as --untracked=no
+        --exclude=<glob>    Add a root-relative Git glob exclusion; repeatable
+        --selected-file=<path>
+                            Prefer this file for the initial selection
+        --pr=<number|URL>   Fetch a GitHub PR without checkout; see |diffreel-pr|
+        --file[=<path>]    Review one literal file, including unchanged/ignored
+                            files; without =path use the invoking/selected file
+        --layout=side_by_side|stacked|inline
+                            Choose the diff layout; see |diffreel-diff-layout|
+        --list, --tree      Flat file list or directory tree
+        --compact, --no-compact
+                            Group/un-group single-child directory chains
+        --explorer, --no-explorer
+                            Show/hide the explorer
+        --explorer-position=left|right|top|bottom
+                            Place the explorer at that edge of the review
+        --repo=<path>, -C <path>
+                            Use this repository or a subdirectory
+        --help              Open this command reference without a review
+        --                  Remaining arguments are Git pathspecs
+
+    --pr, --exclude, --selected-file, --untracked, --layout, --explorer-position
+    and --repo
+    also accept their value
+    as the next argument. Escape spaces with a backslash; shell quotes do not
+    group command arguments. A --staged/--unstaged conflict is an error.
+
+    left...right is shorthand for a fixed merge-base comparison. left...
+    compares merge-base(left, HEAD) with worktree. Resolved commit endpoints
+    stay fixed through refresh and restart, even if a branch moves. Empty or
+    index endpoints cannot be merge-base operands. Multiple merge bases and
+    unrelated histories produce errors.
+
+    Completion offers options, refs and paths using the current review tab's
+    repository unless --repo is supplied. Ref discovery is asynchronous
+    and cached for one minute per repository; a first completion may need a
+    subsequent attempt before refs arrive. It does not start the daemon.
+
+:DiffreelClose                                                   *:DiffreelClose*
+    Close the review in the current tab and retain real buffers and drafts.
+    Also works from extra splits in that tab. Does nothing in an ordinary tab.
+
+:DiffreelRefresh                                                *:DiffreelRefresh*
+    Reconcile the review in the current tab, or retry it after an error.
+    Also works from extra splits in that tab. Does nothing in an ordinary tab.
+    Retrying one failed view does not retry other views automatically.
+
+:DiffreelLayout [side_by_side|stacked|inline]                     *:DiffreelLayout*
+    Change the current tab's review layout. Without an argument, cycle
+    side_by_side -> stacked -> inline -> side_by_side. Works from extra splits;
+    does nothing in an ordinary tab. See |diffreel-inline| for inline limits.
+
+:DiffreelInstall                                                *:DiffreelInstall*
+    Prepare the managed daemon for the installed plugin's build ID and host
+    platform. This command may access the network even when auto_install is
+    false. It does not change an explicit daemon path or a running process.
+    Attempts time out after 120 seconds and can be retried explicitly.
+
+:DiffreelPRCacheClear                                       *:DiffreelPRCacheClear*
+    Remove this repository's refs/diffreel/pr/ snapshot and unused staging refs.
+    Optional --repo=<local path> or -C <local path> selects another local clone.
+    Refuses while a PR view or acquisition uses the cache in any editor or
+    linked worktree. It does not run Git GC or delete normal branches/refs.
+    No gh authentication is required for cache cleanup.
+
+:checkhealth diffreel                                            *diffreel-health*
+    Report local prerequisites, executable selection, cache health, and tool
+    availability without network access. Authentication and remote release
+    availability are not tested. With lazy loading, load diffreel first, with
+    :lua require("diffreel") if the health module cannot be found.
+
+==============================================================================
+3. NAVIGATION                                                *diffreel-mappings*
+
+Default mappings apply in Normal mode except the ih text object below.
+Customize them with |diffreel-keymaps|.
+
+    Explorer ~
+    <CR>                Select a file or toggle a directory
+    <Tab> / <S-Tab>      Next / previous compared file; keep explorer focus
+    <C-f> / <C-b>        Scroll the diff; keep explorer focus
+    <C-t>               Edit the row's regular worktree file in another tab
+    <C-h>               Collapse a branch or close and move to its parent
+    ^                   Move to the parent
+    E / W               Recursively expand / collapse the target subtree
+    gE / gW             Expand / collapse the whole comparison tree
+    yp / yP / yn        Copy relative path / absolute path / name
+    K                   Show the complete absolute path without copying
+    i / I               Toggle list/tree mode / compact directory chains
+    gL                  Cycle side-by-side, stacked and inline diff layouts
+    <Leader>b           Hide / show the explorer
+    <Leader>e           Focus the right pane
+    R                   Refresh or retry
+    g?                  Show active diffreel mappings for this pane
+    q                   Close the review
+
+    Left and right diff panes ~
+    ]f / [f             Next / previous compared file
+    ]c / [c             Next / previous native hunk within this file
+    ]h / [h             Next / previous hunk, continuing across files
+    [H / ]H             First / last hunk in this file
+    gL                  Cycle side-by-side, stacked and inline diff layouts
+    <Leader>b           Hide / show the explorer
+    ih                  Current hunk in Visual/operator-pending mode
+    <Leader>e           Focus the explorer
+    g?                  Show active diffreel mappings for this pane
+    q                   Close the review
+
+                                                         *diffreel-keymap-help*
+g? shows a popup with the active pane's installed diffreel mappings. Resolved
+leaders, aliases, disabled keys and later replacements are reflected. Custom
+functions appear as Custom callback. Close help with q, <Esc> or g?; closing
+help preserves the review, selection and unsaved buffers.
+
+File navigation follows explorer order, including files in folded branches.
+It accepts counts, reveals collapsed parents, and stops at the first or last
+file without wrapping. It starts from the selected comparison file, not an
+unselected explorer row. For example, 2<Tab> moves two files.
+At either boundary the selected file is revealed without a new content read.
+
+The README's <Leader>gD mapping is an example global toggle; setup() does not
+install it. Configure your leader before setup. Mappings on real buffers
+preserve ordinary-window behavior and are restored when diffreel releases them.
+
+Definition navigation can replace the right pane's buffer temporarily. The
+comparison pauses in that window until you return to the source or select a
+file. Closing, moving, or replacing a pane releases a broken review layout.
+
+Hunks and text objects                                      *diffreel-hunks*
+
+]h/[h follow native diff and continue across files in explorer order. Counts
+count landed hunks. Metadata-only and unsupported comparisons are skipped;
+navigation stops at either end without wrapping. Explicit selection, departure
+from the review, comparison transitions and close cancel pending cross-file
+navigation. [H/]H select the first/last native hunk in the current file.
+
+ih selects changed real lines as a linewise Visual range: vih, yih, dih, cih.
+It reflects drafts and diffopt, including whitespace and linematch options.
+Unchanged lines, unsupported panes and missing/filler-only sides have no text
+object. An empty operator object cancels the operator and preserves registers;
+an empty Visual object leaves the existing selection intact. Read-only panes
+still reject editing operators through Neovim's normal buffer protection.
+
+Counts include up to N nonempty hunks in the same file as one contiguous range,
+including any unchanged lines between them; 2yih yanks two hunks. Text objects
+never cross files. Select mode itself is not mapped.
+
+Diff layouts                                           *diffreel-diff-layout*
+
+The layout option selects side_by_side (default), stacked, or inline. Use gL
+or |:DiffreelLayout| to cycle; --layout=inline chooses one for a new review.
+Stacked puts the left endpoint above the right endpoint. Inline displays the
+right endpoint and decorates it with removed old lines. The Explorer's position
+and visibility are independent of the diff layout.
+
+Layout switching keeps the real right buffer, drafts, Undo history and LSP
+attachments. It retains selection, context-fold state and split proportions
+within available screen space. Pending file selection completes in the chosen
+layout; an accepted switch cancels pending cross-file hunk navigation.
+
+Inline                                                     *diffreel-inline*
+
+The worktree buffer stays editable. PR, commit and index endpoints remain
+read-only. Removed lines are virtual decorations: cursor movement, search,
+copying and editing access only the right buffer. Other windows showing that
+buffer do not receive this review's decorations.
+
+Inline requires the experimental nvim__ns_set/nvim__ns_get window-scoped
+namespace API; support is checked at runtime. |diffreel-health| reports current
+availability. It requires internal in 'diffopt'; supported algorithms are
+myers, minimal, patience and histogram. iwhite, iwhiteall, iwhiteeol, iblank
+and native linematch are supported. icase, nonempty 'diffexpr' and 'diffanchors'
+are unsupported. Split layouts retain native diff behavior.
+
+Each inline side is limited to 1 MiB and 20,000 lines, including drafts.
+|diffreel-max_bytes| does not raise those limits; content is never truncated.
+An unsupported request keeps the current split. If content/options become
+unsupported while inline is active, decorations clear and the view returns to
+the most recent split (initially side_by_side), retaining the buffer and draft.
+
+Deletions appear in old-file order at each coarse block's start. Native
+linematch can refine that block into several hunk stops; deleted decorations
+do not interleave at those refined stops. Native diff remains responsible for
+hunk movement, ih, character highlights and context folds. Open context folds
+survive inline updates and layout switches.
+
+The default ]c/[c bindings dispatch next_change/prev_change only in inline.
+Split and ordinary windows keep their native or user mappings. With defaults
+turned off, bind these actions explicitly for inline navigation. They also
+work in split layouts. Explicit assignments to ]c/[c apply in every diff
+layout. ih never selects deleted virtual lines. Deleted text keeps its tab
+alignment and follows the review window's gutter options.
+
+Explorer layout                                             *diffreel-layout*
+
+i switches between a directory tree and a sorted flat file list. The list
+shows relative paths and ignores tree controls, retaining folds for a return
+to tree mode. I compacts single-child directory chains; a grouped row targets
+its deepest directory for selection, path/name operations, and visible-parent
+navigation. Existing folds and compared file nodes stop compaction.
+
+<Leader>b hides/shows the explorer. <Leader>e from a diff pane shows a hidden
+explorer before focusing it. Use |diffreel-explorer| defaults or
+|diffreel.set_explorer()| for left/right/top/bottom placement. Layout changes
+preserve pane buffers, drafts, selection, fold state and scroll position,
+without querying Git. Native pane closure still disposes a broken review.
+
+K on an explorer row opens its complete absolute path in a wrapping popup,
+with control characters escaped. It neither copies nor reads file content
+and works for deleted paths. K, q or <Esc> closes it.
+
+Tree operations                                             *diffreel-tree*
+
+Tree controls use the explorer cursor row and keep its focus. They do not
+change the selected comparison, reload content, or replace unsaved buffers.
+
+<C-h> closes an open branch while retaining its descendants' open states.
+On an ordinary file or closed branch it closes the parent and moves to it.
+^ moves to the parent without folding. Parent navigation stops at the implicit
+worktree root; no action changes the comparison root.
+
+E expands a branch and every known descendant. W closes that entire subtree
+and moves the cursor to its root. On an ordinary file, they target its parent.
+For a top-level file that means the implicit root: all branches are affected
+and the file remains under the cursor. gE/gW operate on the whole tree.
+
+If a fold hides the cursor row, the nearest visible ancestor receives the
+cursor; otherwise the first tree row does. Header/error/empty rows have no
+cursor-dependent action. gE/gW still apply when entries exist. Counts are
+ignored for tree operations.
+
+Directories initially appear expanded. Recursive expansion covers all depths
+in the known comparison tree, without more filesystem scanning. No depth
+option is provided. Existing paths retain folds during refresh, HEAD changes
+and delayed reads. Disappeared branch state is pruned; new directories start
+expanded. Automatic reselection does not reveal hidden files. Explicit file
+selection/navigation reveals its target. Reviews have independent fold state.
+
+Refresh preserves the cursor column and scroll position for a visible row.
+Header/footer cursors remain there. Resizing updates clipping and status
+alignment. Long directory names are shortened; backslashes and control bytes
+are escaped for display. Raw paths remain available through |diffreel-yank|.
+
+A file entry with children from the opposite comparison side also has a branch
+indicator. Tree controls can fold its descendants; Enter continues to select
+the file comparison. Entries are not removed when folded.
+
+Path copies                                                 *diffreel-yank*
+
+yp, yP and yn copy the cursor row's relative path, absolute path or name to the
++ register as characterwise text. This includes directories, deleted files,
+limited content, renamed destinations and retained drafts. Raw names are used;
+display escaping/truncation, quotes and trailing separators are not added.
+Symlinks are not followed and the target does not have to exist on disk.
+
+No cursor row means no copy. A clipboard provider is required; unavailable or
+failing providers report errors without fallback to another register. Native
+command-provider diagnostics remain visible. See |provider-clipboard| for
+provider configuration. Copies do not move the cursor, change the diff, or
+consume counts.
+
+==============================================================================
+4. CONFIGURATION                                              *diffreel-config*
+
+Configure before opening a review: >lua
+    require("diffreel").setup({
+      auto_install = true,
+      on_highlight = nil,
+      watch = true,
+      reconcile_ms = 30000,
+      max_bytes = 1048576,
+      paths = {},
+      exclude = {},
+      untracked = true,
+      line_stats = false,
+      layout = "side_by_side",
+    })
+<
+These are the effective runtime defaults. Omitted settings use their defaults.
+setup() merges settings into the active configuration; a later call does not
+reset omitted fields. Existing healthy daemons are not reconfigured by setup().
+Use a fresh Neovim session after changing daemon options. The keymaps table
+has its own replacement and live-view rules; see |diffreel-keymaps|.
+Invalid option types and numeric ranges are rejected before configuration is
+changed. Integer options must be finite: width supports 1..2147483647, while
+max_bytes and reconcile_ms support 1..9007199254740991.
+
+                                                         *diffreel-auto_install*
+auto_install: boolean (default true)
+    Automatically download a missing or invalid managed daemon on first use.
+    When false, use only a verified cache or an explicit custom executable.
+    |:DiffreelInstall| remains available for an intentional download.
+
+                                                               *diffreel-daemon*
+daemon: string or nil (default nil)
+    Absolute path to a custom daemon. Selection order is this option, then
+    vim.g.diffreel_daemon, then the managed cache. A broken custom path is an
+    error; diffreel does not fall back to another executable or compile one.
+
+    Custom builds must support the current protocol, but do not need a
+    distribution build ID or installed Rust source files. No implicit lookup
+    is performed in daemon/target/release.
+
+                                                               *diffreel-watch*
+watch: boolean (default true)
+    Enable daemon filesystem monitoring and periodic reconciliation. Visible
+    worktree, index and attribute-scoped comparisons recover missed events
+    using |diffreel-reconcile_ms|.
+    Hidden views do not run periodic Git work. Setting this false does not
+    disable manual refresh or the UI's refresh on FocusGained.
+
+                                                         *diffreel-reconcile_ms*
+reconcile_ms: positive integer (default 30000)
+    Periodic reconciliation interval in milliseconds for visible mutable
+    comparisons when watch is enabled. Fixed revision pairs use this timer
+    only for attribute pathspec membership. The interval does not bound Git
+    execution or rendering time.
+
+                                                            *diffreel-max_bytes*
+max_bytes: positive integer (default 1048576)
+    Maximum bytes per content side before it is reported as too-large. The
+    default is 1 MiB. For a 2 MiB limit, use 2 * 1024 * 1024.
+    Inline has independent fixed display limits; see |diffreel-inline|.
+
+                                                               *diffreel-width*
+width: positive integer or nil (default nil)
+    Explorer width in columns at view creation. With nil, use 20% of Neovim's
+    columns rounded down, clamped between 22 and 35 columns. Window layout
+    still depends on the available editor size.
+
+                                                               *diffreel-paths*
+paths: string[] (default {})
+    Git pathspecs relative to the repository root. An empty array includes
+    all changed paths. Git evaluates literal, glob, exclude and attribute
+    magic. The array is copied for each view and survives refresh/restart.
+    A rename crossing the scope becomes an addition or deletion according to
+    its included endpoint. Attribute pathspec membership uses current worktree
+    attributes even when both commit endpoints are fixed.
+
+                                                             *diffreel-exclude*
+exclude: string[] (default {})
+    Additional root-relative Git glob exclusions. Each becomes a
+    :(exclude,glob) pathspec. For example, **/*.lock excludes lock files at
+    every depth; dist/** excludes files below the root's dist directory.
+
+                                                           *diffreel-untracked*
+untracked: boolean (default true)
+    Include new untracked paths in worktree comparisons. With false, a
+    previously tracked path recreated after an index deletion can still be
+    compared when the baseline contains it. Ignore rules remain effective.
+    Selected unsaved buffers may remain as retained entries.
+
+                                                       *diffreel-selected_file*
+selected_file: string, false or nil (default nil)
+    Initial file preference, as a repository-relative or absolute path.
+    With nil, prefer the invoking real file. With false, start at the first
+    compared file. An unmatched preference also falls back to the first file.
+    Only initial selection consumes this preference; refresh preserves later
+    choices. It does not restrict comparison membership.
+
+                                                              *diffreel-pr*
+pr: positive integer or GitHub PR URL (open() only; default nil)
+    Acquire an open, draft, closed or merged PR in an existing local clone.
+    Requires authenticated gh with access to the repository. Local comparisons
+    do not require gh. A number uses gh's default repository for this clone;
+    GH_REPO is ignored. A URL must match a configured remote or its GitHub fork
+    parent. Use root/--repo to select a different local clone. >lua
+        require("diffreel").open({ pr = 123 })
+        require("diffreel").open({ pr = "https://github.com/owner/repo/pull/123" })
+<
+    Both panes are read-only. The left is merge-base(recorded base SHA, head
+    SHA), the right is the PR's recorded head SHA. Closed/merged views retain
+    the original PR diff when those historical objects remain retrievable.
+    No checkout occurs. HEAD, index, working files, normal refs, Git config
+    and FETCH_HEAD are preserved; internal Git hooks are disabled for acquisition.
+
+    paths, exclude, file, selected_file, line_stats, layout and explorer can be
+    combined with pr. Explicit left/right, staged/unstaged, merge_base and
+    untracked options are rejected. Configured untracked defaults are ignored.
+
+    R/:DiffreelRefresh explicitly reacquires the PR and updates this view.
+    Focus/filesystem events never refetch it. Selection and layout are retained
+    where possible. The candidate comparison and initial file contents are
+    prepared before activation; failures preserve the previous displayed diff
+    and PR metadata. Closing or superseding cancels the pending acquisition.
+    The 120-second deadline applies only to the PR job, not other reviews.
+
+    Missing history/objects or an ambiguous merge base are errors, not empty
+    substitutions. Deepen a shallow clone manually when needed. Authentication
+    errors require gh auth login/status outside the plugin.
+
+    Dedicated snapshot refs persist under refs/diffreel/pr/. Reopening queries
+    GitHub and reuses available objects; failed network requests do not silently
+    fall back to cached metadata. There is no dedicated offline PR browser.
+    |:DiffreelPRCacheClear| deletes unused cache refs without invoking Git GC.
+
+    Restart recovery acquires cache protection and restores exact saved commits
+    and comparison registration. If deliberate cache removal and Git GC while
+    all backing processes were stopped removed them, reopen the PR to acquire
+    it again. Existing visible buffers are preserved on recovery failure.
+
+                                                            *diffreel-file*
+file: boolean or string (open() only; default false)
+    true pins the invoking real file or current review selection, including
+    from a help popup or unnamed extra split in that review tab. A string
+    pins that literal repository-relative or absolute path; wildcards are not
+    expanded. Unchanged and ignored files are included. A missing path stays
+    pinned with an explicit absent-from-both-endpoints message and can recover
+    on creation/refresh. Unsaved matching real buffers remain editable.
+    A rename does not retarget the pinned path.
+
+    Configured paths/exclude/untracked defaults are overridden. Explicit paths
+    or exclude cannot be combined with file. The explorer starts hidden unless
+    this open() call explicitly supplies explorer.visible=true. --file takes no
+    next-argument value; use --file=<path> for an explicit file.
+
+                                                        *diffreel-layout-option*
+layout: string (default "side_by_side")
+    "side_by_side", "stacked" or "inline". setup() supplies the default for
+    future reviews; open() can override it. Use |diffreel.set_layout()| to
+    change a live view. See |diffreel-diff-layout| and |diffreel-inline|.
+
+                                                        *diffreel-explorer*
+explorer: table (setup() defaults and per-open overrides)
+    mode:     "tree" (default) or "list"
+    compact:  boolean (default false)
+    visible:  boolean (default true; false for a file view unless explicit)
+    position: "left" (default), "right", "top" or "bottom"
+    width:    positive integer; defaults to top-level width or automatic width
+    height:   positive integer (default 10)
+
+    Each open() copies and merges these fields with setup() defaults. Width is
+    used for left/right panels, height for top/bottom panels. Native resizing
+    is remembered across hide/show. Dimensions are constrained by screen space.
+    Use |diffreel.set_explorer()| to modify an existing view.
+
+                                                          *diffreel-line_stats*
+line_stats: boolean (default false)
+    Show per-file additions/deletions and an explorer total. Counts use saved
+    endpoint contents, including captured index OIDs, rather than unsaved
+    drafts. Myers line comparison includes BOM, line endings and EOF newline;
+    Neovim diffopt does not affect counts. Empty files contribute zero lines.
+
+    Counting starts after content readiness, uses bounded batches and caches
+    the comparison generation. Switching files does not recompute counts.
+    … means pending, bin means binary, and — means unavailable. The selected
+    file's reason is shown below the tree. Partial totals omit pending or
+    unavailable counts. Retained unsaved-only entries have no saved count.
+
+    Unsupported/stale content and pairs exceeding 4 MiB or 200,000 combined
+    lines have unavailable counts, independently of max_bytes. A statistics
+    error does not stop the review. Refresh retries against current content.
+
+paths, exclude, untracked, selected_file, line_stats, layout and explorer can
+be overridden by open(). Per-open arrays replace their configured arrays; they do not append.
+Existing views retain their original options after setup() changes defaults.
+
+                                                              *diffreel-backend*
+backend: string (legacy; default "rust")
+    The value "rust" is accepted for compatibility. "lua" and other values
+    are rejected before the active configuration is replaced.
+
+                                                             *diffreel-keymaps*
+keymaps: table (default {})
+    Configure Normal-mode explorer/diff bindings and Visual/operator-pending
+    bindings through diff_visual/diff_operator. Diff scopes apply to both
+    left and right panes. Example: >lua
+        require("diffreel").setup({
+          keymaps = {
+            explorer = { q = false, ["<Esc>"] = "close" },
+            diff = { ["<Esc>"] = "close" },
+          },
+        })
+<
+    Fields:
+        defaults: boolean (default true)
+            Include the built-in mappings in |diffreel-mappings|. With false,
+            only your supplied keys are assigned by diffreel.
+        explorer: table (default {})
+            Keys and operations for the explorer.
+        diff: table (default {})
+            Normal-mode keys and operations for both diff panes.
+        diff_visual: table (default {})
+            Visual (x) keys; default ih="select_hunk".
+        diff_operator: table (default {})
+            Operator-pending (o) keys; default ih="select_hunk".
+
+    Each section maps a nonempty key string to a built-in operation name,
+    a Lua function, or false. false disables that diffreel binding; it does not
+    delete ordinary user mappings or native keys. Several keys can invoke
+    the same operation. Add a new key and disable the old one to move it.
+
+    Built-in operation names:                              *diffreel-actions*
+        close               Close the current review
+        refresh             Reconcile or retry the current review
+        show_help           Show the active pane's diffreel mappings
+        toggle_explorer     Hide/show the explorer
+        cycle_layout        Cycle side_by_side, stacked and inline
+        layout_side_by_side Select side_by_side
+        layout_stacked      Select stacked
+        layout_inline       Select inline
+        next_change         Next native hunk within this file, using the count
+        prev_change         Previous native hunk within this file, using the count
+        toggle_listing      Switch tree/list mode
+        toggle_compact      Toggle directory-chain compaction
+        show_path           Show the explorer row's absolute path
+        next_hunk           Next hunk across files, using the count
+        prev_hunk           Previous hunk across files, using the count
+        first_hunk          First hunk in the current file
+        last_hunk           Last hunk in the current file
+        select_hunk         Select up to count hunks; Visual/operator only
+        next_file           Next file, using the count
+        prev_file           Previous file, using the count
+        focus_explorer      Focus the explorer
+        focus_right         Focus the right pane
+        scroll_down         Scroll right pane down by a quarter-window
+        scroll_up           Scroll right pane up by a quarter-window
+        select_entry        Select/toggle the explorer cursor row
+        edit_file           Edit that row's regular worktree file in a tab
+        collapse_node       Close a branch or close and move to its parent
+        parent              Move to the parent without folding
+        expand_recursive    Expand the target subtree
+        collapse_recursive  Close the target subtree and move to its root
+        expand_all          Expand the whole comparison tree
+        collapse_all        Close the whole comparison tree
+        yank_path           Copy the cursor row's relative path
+        yank_path_absolute  Copy its absolute path
+        yank_name           Copy its name
+
+    select_entry, edit_file, show_path, tree operations and path copies require
+    explorer. select_hunk is the only named Visual/operator operation; all
+    other names require a Normal-mode section. Hunk actions from the explorer
+    use the right pane. File navigation, next_change/prev_change,
+    next_hunk/prev_hunk and select_hunk consume counts. See |diffreel-tree|, |diffreel-yank| and |diffreel-hunks|.
+
+    Custom callbacks:                                 *diffreel-keymap-callback*
+    A function receives ctx.view, the opaque view handle, and ctx.count,
+    vim.v.count1 (1 by default), plus ctx.mode (n/x/o).
+    It runs as a non-expression action; return
+    values are ignored. Failures are reported without closing the view. >lua
+        require("diffreel").setup({
+          keymaps = {
+            diff = {
+              ["<Leader>r"] = function(ctx)
+                require("diffreel").refresh(ctx.view)
+                vim.notify("Refresh requested")
+              end,
+            },
+          },
+        })
+<
+    For lazy.nvim, put keymaps inside opts. RHS command strings, expr/remap
+    options and per-open keymap policies are not supported. Custom Visual/
+    operator callbacks must implement their own selection/cancellation behavior.
+    Select mode is not intercepted.
+
+    Set <Leader> and <LocalLeader> before setup: they are resolved when keys
+    are configured, and changing the variables does not rebind existing keys.
+    Native key spelling and modifier distinctions are preserved. Terminals
+    may not distinguish all keys, such as <Tab> and <C-i>. Prefix chords use
+    normal timeout handling; nowait is not forced.
+
+    Invalid/overlong keys, duplicate native key identities in a section,
+    unknown operations or scopes, and internal <Plug>(Diffreel...) key names
+    are rejected before the active configuration is changed.
+
+    Reconfiguration:                                       *diffreel-keymap-reset*
+    Close all reviews, including pending ones, and let cleanup finish before
+    changing effective mappings. Identical bindings and unrelated setup options
+    remain allowed while views are open. Function identity matters for custom
+    callbacks.
+
+    Omitting keymaps retains the current bindings and resolved leaders.
+    Providing a table replaces the entire override specification, resolving
+    from defaults rather than merging with previous overrides. To reset: >lua
+        require("diffreel").setup({ keymaps = {} })
+<
+    Inputs are copied. A rejected setup leaves the previous configuration and
+    mappings intact. Shared real buffers dispatch only for the current owning
+    review; ordinary windows and definition targets use their original keys.
+    Closing the last owner restores mappings still owned by diffreel, retaining
+    later user replacements.
+
+HIGHLIGHTS                                               *diffreel-highlights*
+                                                        *diffreel-on_highlight*
+on_highlight: function(groups) | false | nil (default: nil)
+    Receives a fresh table keyed by the full public group names below. Modify
+    entries in place; the return value is ignored. Definitions follow
+    |nvim_set_hl()|. A link overrides other attributes: replace the table or
+    remove link before setting colors. {} clears attributes; removing an entry
+    with nil leaves its underlying definition unchanged for this application.
+    Unknown groups and default/force fields are rejected.
+
+    Explicit callback changes override colorscheme/user definitions. Untouched
+    groups respect those definitions, then fall back to diffreel defaults.
+    Runs on setup() and ColorScheme with current theme-derived diff colors.
+    Only modify the supplied table; callback side effects cannot be rolled back.
+    Invalid setup leaves config/colors intact. A ColorScheme callback failure
+    reports the error and applies theme/default definitions without the callback.
+    The configured callback is retried on the next application.
+
+    Omitting on_highlight retains the callback. Set false to disable it and
+    restore underlying definitions still owned by diffreel. Later external
+    changes survive unless the callback explicitly replaces that group again.
+    An external write equal to an installed definition cannot transfer ownership.
+    Cleared theme values are discarded rather than restored on callback removal.
+
+    Direct nvim_set_hl(0, name, spec) changes take effect immediately for mapped
+    groups. Call setup() after direct icon changes to update provider routing.
+    The callback reasserts its changes on the next setup/ColorScheme. Open views
+    receive updates; hidden explorers update when next shown. Example: >lua
+    require("diffreel").setup({
+      on_highlight = function(groups)
+        groups.DiffreelExplorerDirectoryName = { fg = "#89b4fa", bold = true }
+        groups.DiffreelExplorerAddedName = { link = "DiffreelExplorerAdded" }
+        groups.DiffreelLineAdd = { bg = "#203040" }
+      end,
+    })
+<
+    Existing window-local winhighlight aliases take precedence over new chrome
+    mappings (Normal, LineNr, WinBar, etc.). Native diff/fold mappings keep their
+    review behavior. Global native groups are never modified.
+
+PUBLIC GROUPS                                     *diffreel-highlight-groups*
+
+    All names below are public. Empty inherits the surrounding text style.
+    Explorer status families separate base, Name, Icon and Marker. Names link
+    to ExplorerFileName; markers link to the corresponding status base. A
+    buffer-only row uses BufferOnly. Directory arrows use DirectoryIcon.
+
+    Icons use devicons unless an explicit definition appears on the status Icon
+    or its link chain, including ExplorerFileIcon. An explicit {} suppresses
+    provider colors too. To clear an already-empty base such as FileIcon, use
+    the callback; an identical direct write cannot transfer ownership.
+    No provider means no additional file icon glyphs.
+
+    Existing LineAdd/Delete, TextAdd/Delete, Filler, Selected, Title, Dim, Added,
+    Deleted and Modified remain supported. New groups link to them where useful.
+    Line/text groups are shared across split, stacked and inline diff layouts.
+
+    Group                                      Default
+    DiffreelAdded                              DiagnosticOk
+    DiffreelDeleted                            DiagnosticError
+    DiffreelDiffCursorLineNr                   CursorLineNr
+    DiffreelDiffFoldColumn                     FoldColumn
+    DiffreelDiffFolded                         DiffreelDim
+    DiffreelDiffLineNr                         LineNr
+    DiffreelDiffNormal                         Normal
+    DiffreelDiffNormalNC                       NormalNC
+    DiffreelDiffWinBar                         WinBar
+    DiffreelDiffWinBarNC                       WinBarNC
+    DiffreelDiffWinSeparator                   WinSeparator
+    DiffreelDiffWinbarPath                     empty
+    DiffreelDiffWinbarRevision                 DiffreelDim
+    DiffreelDiffWinbarState                    DiffreelDim
+    DiffreelDim                                Comment
+    DiffreelExplorerAdded                      DiffreelAdded
+    DiffreelExplorerAddedIcon                  DiffreelExplorerFileIcon
+    DiffreelExplorerAddedMarker                DiffreelExplorerAdded
+    DiffreelExplorerAddedName                  DiffreelExplorerFileName
+    DiffreelExplorerBufferOnly                 DiffreelModified
+    DiffreelExplorerBufferOnlyIcon             DiffreelExplorerFileIcon
+    DiffreelExplorerBufferOnlyMarker           DiffreelExplorerBufferOnly
+    DiffreelExplorerBufferOnlyName             DiffreelExplorerFileName
+    DiffreelExplorerComparison                 DiffreelDim
+    DiffreelExplorerConflict                   empty
+    DiffreelExplorerCursorLine                 CursorLine
+    DiffreelExplorerDeleted                    DiffreelDeleted
+    DiffreelExplorerDeletedIcon                DiffreelExplorerFileIcon
+    DiffreelExplorerDeletedMarker              DiffreelExplorerDeleted
+    DiffreelExplorerDeletedName                DiffreelExplorerFileName
+    DiffreelExplorerDetail                     empty
+    DiffreelExplorerDirectoryIcon              Directory
+    DiffreelExplorerDirectoryName              Directory
+    DiffreelExplorerEmpty                      empty
+    DiffreelExplorerError                      empty
+    DiffreelExplorerFileCount                  DiffreelDim
+    DiffreelExplorerFileIcon                   empty
+    DiffreelExplorerFileName                   empty
+    DiffreelExplorerIndent                     empty
+    DiffreelExplorerLimited                    DiagnosticWarn
+    DiffreelExplorerLimitedIcon                DiffreelExplorerFileIcon
+    DiffreelExplorerLimitedMarker              DiffreelExplorerLimited
+    DiffreelExplorerLimitedName                DiffreelExplorerFileName
+    DiffreelExplorerLoading                    empty
+    DiffreelExplorerMetadata                   DiffreelModified
+    DiffreelExplorerMetadataIcon               DiffreelExplorerFileIcon
+    DiffreelExplorerMetadataMarker             DiffreelExplorerMetadata
+    DiffreelExplorerMetadataName               DiffreelExplorerFileName
+    DiffreelExplorerMissing                    DiagnosticWarn
+    DiffreelExplorerMissingIcon                DiffreelExplorerFileIcon
+    DiffreelExplorerMissingMarker              DiffreelExplorerMissing
+    DiffreelExplorerMissingName                DiffreelExplorerFileName
+    DiffreelExplorerModified                   DiffreelModified
+    DiffreelExplorerModifiedIcon               DiffreelExplorerFileIcon
+    DiffreelExplorerModifiedMarker             DiffreelExplorerModified
+    DiffreelExplorerModifiedName               DiffreelExplorerFileName
+    DiffreelExplorerNormal                     Normal
+    DiffreelExplorerNormalNC                   NormalNC
+    DiffreelExplorerPaused                     empty
+    DiffreelExplorerRenamed                    DiffreelModified
+    DiffreelExplorerRenamedIcon                DiffreelExplorerFileIcon
+    DiffreelExplorerRenamedMarker              DiffreelExplorerRenamed
+    DiffreelExplorerRenamedName                DiffreelExplorerFileName
+    DiffreelExplorerRootName                   Directory
+    DiffreelExplorerSelected                   DiffreelSelected
+    DiffreelExplorerStatsAdd                   empty
+    DiffreelExplorerStatsDelete                empty
+    DiffreelExplorerStatsPending               empty
+    DiffreelExplorerStatsUnavailable           empty
+    DiffreelExplorerSummary                    empty
+    DiffreelExplorerTitle                      DiffreelTitle
+    DiffreelExplorerTypeChange                 DiffreelModified
+    DiffreelExplorerTypeChangeIcon             DiffreelExplorerFileIcon
+    DiffreelExplorerTypeChangeMarker           DiffreelExplorerTypeChange
+    DiffreelExplorerTypeChangeName             DiffreelExplorerFileName
+    DiffreelExplorerUnchanged                  DiffreelDim
+    DiffreelExplorerUnchangedIcon              DiffreelExplorerFileIcon
+    DiffreelExplorerUnchangedMarker            DiffreelExplorerUnchanged
+    DiffreelExplorerUnchangedName              DiffreelExplorerFileName
+    DiffreelExplorerUnknown                    DiffreelModified
+    DiffreelExplorerUnknownIcon                DiffreelExplorerFileIcon
+    DiffreelExplorerUnknownMarker              DiffreelExplorerUnknown
+    DiffreelExplorerUnknownName                DiffreelExplorerFileName
+    DiffreelExplorerWinBar                     WinBar
+    DiffreelExplorerWinBarNC                   WinBarNC
+    DiffreelExplorerWinSeparator               WinSeparator
+    DiffreelFiller                             NonText/Comment fg, Normal bg
+    DiffreelHelpAction                         empty
+    DiffreelHelpBorder                         FloatBorder
+    DiffreelHelpHeader                         empty
+    DiffreelHelpHint                           empty
+    DiffreelHelpKey                            empty
+    DiffreelHelpNormal                         NormalFloat
+    DiffreelHelpTitle                          FloatTitle
+    DiffreelInlineDeleteNumber                 DiffreelLineDelete
+    DiffreelLineAdd                            DiffAdd background
+    DiffreelLineDelete                         DiffDelete background
+    DiffreelModified                           DiagnosticWarn
+    DiffreelPathBorder                         FloatBorder
+    DiffreelPathNormal                         NormalFloat
+    DiffreelPathText                           empty
+    DiffreelPathTitle                          FloatTitle
+    DiffreelSelected                           Visual/CursorLine bg, bold
+    DiffreelTextAdd                            derived addition background
+    DiffreelTextDelete                         derived deletion background
+    DiffreelTitle                              Title
+
+    Effective diff backgrounds account for reverse attributes. If missing,
+    LineAdd uses #1c394b and LineDelete #513351. Text background channel factors
+    are 1.4 (dark) or 0.92 (light), clamped to 255. They derive from theme
+    defaults independently of callback changes to line groups. Specify both
+    line and text groups to customize both shades.
+
+==============================================================================
+5. LUA API                                                    *diffreel-api*
+
+Use require("diffreel") to access these functions. A view returned by open() is
+an opaque handle to pass back to select(), refresh(), and close(). Its internal
+fields and the daemon's transport interface are not part of this reference.
+
+setup({opts})                                                 *diffreel.setup()*
+    Merge configuration and register commands, mappings used by views, and
+    lifecycle handlers. See |diffreel-config|. Call before open(). Plugin loading
+    registers default commands; lazy.nvim's opts table calls setup() for you.
+
+open({opts})                                                  *diffreel.open()*
+    Create and return a new view immediately. This API never toggles a view.
+    opts is optional and supports:
+        root:  worktree path or a subdirectory; defaults to the current
+               review's root, current file's repository, or cwd's repository
+        left:  Git revision expression or ":0"; defaults to "HEAD"
+        right: Git revision expression, ":0" or "worktree"; defaults to worktree
+        merge_base: boolean (default false); resolve merge-base(left, right),
+                    using HEAD as the target when right is worktree
+        pr:    positive PR number or GitHub PR URL; see |diffreel-pr|
+        file:  pin one literal file; see |diffreel-file|
+        paths, exclude, untracked, selected_file, line_stats, layout, explorer:
+               Override the corresponding setup defaults for this view
+
+    A triple-dot left expression is accepted when right is omitted. For a
+    frozen empty endpoint, supply left = "" or right = "". An unborn HEAD
+    resolves to the empty endpoint. Index snapshots reconcile after external
+    index changes; their virtual buffers cannot write back to Git.
+
+    Root discovery can raise an error before a view is created. Daemon
+    preparation and comparison/content requests are asynchronous; their
+    failures are displayed in the view. A returned handle does not mean
+    content is ready. See |diffreel-events| and |:DiffreelRefresh|.
+
+    The HEAD/worktree and HEAD/index exceptions in |:Diffreel| also apply here. >lua
+        local view = require("diffreel").open({ left = "HEAD~1" })
+        require("diffreel").open({ left = ":0", selected_file = "src/main.lua" })
+        require("diffreel").open({ left = "main...", paths = { "src" } })
+<
+select({view}, {path})                                       *diffreel.select()*
+    Select an exact repository-relative path in the view's entries. This is
+    asynchronous. A call before its comparison is ready, during a comparison
+    transition, or for an unknown path does nothing. Wait for initial content
+    preparation before selecting; do not call immediately after open().
+
+refresh([{view}])                                           *diffreel.refresh()*
+    Reconcile or retry the supplied view asynchronously. A PR view explicitly
+    reacquires the latest PR and prepares it before replacing its comparison. With no argument,
+    use the current tab's review. A closed or absent view is ignored.
+
+close([{view}])                                               *diffreel.close()*
+    Close the supplied review and retain real buffers and unsaved text. With
+    no argument, use the current tab's review. A closed or absent view is
+    ignored. Closing a pending view prevents startup from reopening it.
+    Requests from buffer-loading/window hooks wait for the active transition
+    to unwind. |DiffreelClose| announces completed cleanup.
+
+show_help([{view}])                                       *diffreel.show_help()*
+    Show active diffreel mappings for the current pane of this view. With no
+    argument, use the current review. Calls from outside its owned panes or
+    while the right pane shows a definition target do nothing.
+
+get_current()                                           *diffreel.get_current()*
+    Return the view for the current managed pane, or nil in ordinary windows.
+
+get_view({id})                                              *diffreel.get_view()*
+    Return the active view handle for an event's view_id, or nil after disposal.
+
+set_layout([{view}], {mode})                               *diffreel.set_layout()*
+    Set side_by_side, stacked or inline; pass nil for the current tab's view.
+    Invalid modes and incompatible inline options raise before changing layout.
+    Inline preparation is asynchronous. Failed content/coverage checks keep the
+    prior split and report the reason. Selection can finish before the switch.
+    Use |DiffreelLayoutChanged| and |DiffreelReady| to observe completion.
+
+cycle_layout([{view}])                                   *diffreel.cycle_layout()*
+    Cycle the three diff layouts. Default: current tab's review.
+
+set_explorer([{view}], {settings})                       *diffreel.set_explorer()*
+    Merge |diffreel-explorer| fields into this view and apply the layout.
+    Pass nil for the current tab's review. Invalid settings raise before any
+    layout change. A native layout failure preserves the comparison for retry.
+
+toggle_explorer([{view}])                            *diffreel.toggle_explorer()*
+focus_explorer([{view}])                              *diffreel.focus_explorer()*
+    Toggle visibility, or show and focus the explorer. Default: current tab.
+
+show_path([{view}], [{path}])                             *diffreel.show_path()*
+    Display a complete absolute path without copying. Default: current pane's
+    review and its selected path. Explicit paths must be exact tree-node paths.
+
+first_hunk([{view}])                                     *diffreel.first_hunk()*
+last_hunk([{view}])                                       *diffreel.last_hunk()*
+    Move to the first/last native hunk in the current diff pane, or right pane
+    when called from the explorer. Default: current managed pane's view.
+
+next_change([{view}], [{amount}])                       *diffreel.next_change()*
+    Move by a signed hunk count (default 1) within the current file, through
+    native diff in every layout. A negative count moves backwards.
+
+next_hunk([{view}], [{amount}])                           *diffreel.next_hunk()*
+    Move by a signed nonzero integer hunk count (default 1), continuing across
+    files asynchronously. A negative count moves backwards. See |diffreel-hunks|.
+
+select_hunk([{view}], [{count}])                        *diffreel.select_hunk()*
+    Select up to count hunks (default 1) in the current diff pane. This non-expr
+    action is used by guarded Visual/operator mappings; their expression guard
+    cancels empty operator ranges before executing an operator.
+
+shutdown()                                                 *diffreel.shutdown()*
+    Dispose all reviews and close owned daemons, installation attempts and
+    pending completion ref queries.
+    Close hooks cannot create reviews while shutdown is in progress.
+    Configuration and commands remain registered, so later open() calls can
+    create new reviews. Neovim also calls this during VimLeavePre.
+
+==============================================================================
+6. EVENTS                                                     *diffreel-events*
+
+All events are User autocmds. Register before open(). event.data contains:
+    view_id        string: view identity, accepted by |diffreel.get_view()|
+    root           string: absolute repository root
+    path           string or absent: selected repository-relative path
+    comparison_id  string or absent: resolved comparison identity
+    generation     number or absent: comparison generation
+
+Open can precede comparison/path availability. Close retains the final scalar
+context even though get_view() then returns nil. Do not retain buffer/window
+IDs beyond their view/selection lifetime. Hook errors are reported; cleanup
+continues, and subsequent asynchronous work rechecks the selection and view.
+
+User DiffreelOpen                                                *DiffreelOpen*
+    Once the windows, mappings and initial layout exist, before backend startup.
+    data.explorer contains the initial effective explorer options; data.layout
+    identifies the initial diff layout.
+
+User DiffreelEnter                                              *DiffreelEnter*
+User DiffreelLeave                                              *DiffreelLeave*
+    Enter/leave the review tab, including the initial enter after Open. Pane
+    focus changes within that tab do not emit them. Closing an entered review
+    emits Leave before Close. Pending cross-file navigation ends on Leave.
+
+User DiffreelDiffBufRead                                  *DiffreelDiffBufRead*
+    After selected contents and native diff have been prepared, once per side
+    (left then right). Can repeat on refresh or re-selection. data.bufnr,
+    data.side, data.visible and data.layout identify the side and layout.
+    data.winid is present only for a visible pane; inline left events omit it.
+    This is a preparation event;
+    the right side may be an existing real buffer with unsaved text.
+
+User DiffreelFileSelect                                    *DiffreelFileSelect*
+    After the prepared path or resolved comparison changes. data.previous_path
+    is the previously announced path, when present. Duplicate refreshes do not
+    repeat it. An empty comparison can announce path removal. A failed or
+    superseded selection does not announce successful selection.
+
+User DiffreelLayoutChanged                              *DiffreelLayoutChanged*
+    After an effective diff or explorer layout change through the command,
+    API or mappings, including automatic inline fallback. data.explorer holds
+    the explorer options. A diff-layout change also includes data.layout and
+    data.previous_layout. No-op updates do not emit it. Native manual resizing
+    is not an API layout event.
+
+User DiffreelReady                                              *DiffreelReady*
+    Selected content is prepared and the view is not updating or in error.
+    Inline also requires a current decoration cache. May repeat for selection,
+    refresh or inline layout preparation, including empty views. It precedes the
+    eventual attached-UI flush and optional line statistics, so neither screen
+    rendering nor statistics are guaranteed complete by this event.
+
+User DiffreelClose                                              *DiffreelClose*
+    Once, after subscriptions, owned mappings, buffers and presentation have
+    been released. It also covers pending views and invalid native layouts.
+    No subsequent backend completion can reopen the closed view.
+
+A normal open emits Open, Enter, DiffBufRead for both sides, FileSelect, then
+Ready. Hooks can close a view or supersede selection, suppressing the remaining
+obsolete events. Later tab transitions and Close are independent of content
+readiness. Example: >lua
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "DiffreelFileSelect",
+      callback = function(event)
+        local view = require("diffreel").get_view(event.data.view_id)
+        if view and event.data.path then
+          vim.notify("Reviewing " .. event.data.path)
+        end
+      end,
+    })
+<
+==============================================================================
+7. CONTENT AND RECOVERY                                       *diffreel-content*
+
+UTF-8 text preserves BOM, LF/CRLF, final newline and mode metadata. Empty and
+missing files remain distinct. Symlinks compare target text without following
+links. Binary, oversized, transformed, conflicted, sparse, submodule and other
+unsupported content is reported explicitly rather than shown as ordinary text.
+See |diffreel-max_bytes| and docs/user-guide.md for content details.
+
+Unsaved real buffers survive external writes, deletion, unsupported replacement,
+selection and close. The UI reports when a draft differs from disk. An unsaved
+path that leaves the Git change list can remain in the explorer with '*'.
+Saving is an ordinary Neovim write, not a merge of the draft and external edits.
+
+If preparation fails, run |diffreel-health| and check the displayed error. Check
+curl availability, connectivity and the release assets. A new build on main
+may still be waiting for CI. After correcting the problem, use
+|:DiffreelInstall| or retry the affected view with R / |:DiffreelRefresh|.
+
+Managed installations are cached under:
+    stdpath("data")/diffreel/daemon/<build ID>/<target>
+The executable is verified against its installed record. Corrupt or incomplete
+caches are fetched again when allowed; offline mode reports an error instead.
+Older build IDs are retained for rollback. Always restart Neovim after updating
+or rolling back the plugin. Custom executables are selected by |diffreel-daemon|.
+
+==============================================================================
+ vim:tw=78:ts=8:noet:ft=help:norl:

@@ -1,0 +1,155 @@
+name: Validate and distribute
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GH_PROMPT_DISABLED: '1'
+  GH_DEBUG: ''
+  DEBUG: ''
+  GH_NO_UPDATE_NOTIFIER: '1'
+
+jobs:
+  identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      build_id: ${{ steps.identity.outputs.build_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version-file: .deno-version
+      - run: deno run --frozen -A scripts/setup-ci.ts --editor-only
+      - id: identity
+        run: |
+          build_id=$(nvim --headless -u NONE -i NONE -l scripts/build-id.lua)
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
+
+  native:
+    needs: identity
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      BUILD_ID: ${{ needs.identity.outputs.build_id }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version-file: .deno-version
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools libcurl4-openssl-dev libssl-dev zlib1g-dev
+      - run: deno run --frozen -A scripts/setup-ci.ts
+      - run: |
+          test "$(nvim --headless -u NONE -i NONE -l scripts/build-id.lua)" = "$BUILD_ID"
+          nvim --version | head -1
+          git --version
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: deno run --frozen -A scripts/release.ts fetch "$BUILD_ID" .wadackel/qa/dist --target "$TARGET"
+      - if: steps.release.outputs.reused != 'true'
+        run: sh scripts/build-daemon.sh "$TARGET" .wadackel/qa/dist "$BUILD_ID"
+      - run: |
+          deno run --no-config -A scripts/validate-daemon.ts ".wadackel/qa/dist/diffreel-daemon-$TARGET" "$TARGET" "$BUILD_ID"
+          deno task check
+          cargo +1.97.1 fmt --check --manifest-path daemon/Cargo.toml
+          cargo +1.97.1 test --locked --manifest-path daemon/Cargo.toml
+          deno task test --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET"
+          deno run --frozen -A tests/install_integration.ts --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: daemon-${{ matrix.target }}
+          path: .wadackel/qa/dist/diffreel-daemon-${{ matrix.target }}
+          include-hidden-files: true
+          if-no-files-found: error
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: evidence-${{ matrix.target }}
+          path: .wadackel/qa/ci
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  publish:
+    needs: [identity, native]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: daemon-${{ needs.identity.outputs.build_id }}
+      cancel-in-progress: false
+    env:
+      BUILD_ID: ${{ needs.identity.outputs.build_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version-file: .deno-version
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: daemon-*
+          path: .wadackel/qa/dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: deno run --frozen -A scripts/release.ts publish "$BUILD_ID" .wadackel/qa/dist --commit "$GITHUB_SHA"
+
+  consumer:
+    needs: [identity, publish]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-15-intel, ubuntu-24.04-arm, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version-file: .deno-version
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libssl-dev zlib1g-dev
+      - run: |
+          deno run --frozen -A scripts/setup-ci.ts
+      - env:
+          DIFFREEL_COMMIT: ${{ github.sha }}
+          DIFFREEL_EXPECTED_ID: ${{ needs.identity.outputs.build_id }}
+        run: deno run --frozen -A tests/consumer.ts
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: consumer-${{ matrix.runner }}
+          path: .wadackel/qa/consumer
+          include-hidden-files: true
+          if-no-files-found: warn

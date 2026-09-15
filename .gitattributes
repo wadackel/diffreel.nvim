@@ -1,0 +1,10 @@
+daemon/*.toml text eol=lf
+daemon/Cargo.lock text eol=lf
+daemon/**/*.rs text eol=lf
+daemon/build.rs text eol=lf
+distribution.json text eol=lf
+lua/diffreel/distribution.lua text eol=lf
+scripts/build-daemon.sh text eol=lf
+scripts/validate-daemon.ts text eol=lf
+.deno-version text eol=lf
+.gitattributes text eol=lf
