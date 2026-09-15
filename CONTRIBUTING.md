@@ -24,7 +24,7 @@ For changes that introduce a new workflow or alter public behavior, discuss the 
 
 ## Develop a change
 
-1. Follow [build and test](docs/development.md#build-and-test) using Cargo on macOS or Linux. Nix is an optional macOS development route.
+1. Follow [build and test](docs/development.md#build-and-test): enter `nix develop`, then use `just check`, `just build`, and `just test`. A [non-Nix setup](docs/development.md#without-nix) is available, including for Intel Macs.
 2. Read the relevant [architecture contracts](docs/architecture.md) before changing asynchronous state, monitoring, buffers, or protocol behavior.
 3. For a behavior change, reproduce the expected behavior with an existing test or a focused regression before implementing the fix.
 4. Run the [checks relevant to the change](docs/development.md#choose-checks-by-the-change), and update user documentation when behavior changes.

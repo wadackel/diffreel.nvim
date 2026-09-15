@@ -4,7 +4,6 @@ import {
   assert,
   denoArgs,
   executable,
-  failure,
   join,
   json,
   lines,
@@ -13,53 +12,44 @@ import {
   resolve,
   ROOT,
   run,
-  write,
 } from "./lib.ts";
+import { runSuite, type TestCommand, validateJobs } from "./test-runner.ts";
 
-async function main() {
-  const args = argumentsFor({ daemon: "", output: ".wadackel/qa/ci" }, [
-      "daemon",
-    ]),
-    output = resolve(String(args.output)),
-    daemon = resolve(String(args.daemon));
-  mkdir(output);
-  const env = { ...Deno.env.toObject(), DIFFREEL_DAEMON: daemon },
-    nvim = executable("nvim");
-  assert(nvim, "Neovim must be available on PATH");
-  json(join(output, "environment.json"), {
-    platform: `${Deno.build.os}-${Deno.build.arch}`,
-    nvim,
-    nvim_version: lines((await run([nvim, "--version"])).stdout)[0],
-    git_version: (await run(["git", "--version"])).stdout.trim(),
-    deno_version: Deno.version,
-    daemon,
-    daemon_build: JSON.parse((await run([daemon, "--build-info"])).stdout),
-  });
-  const commands = [...Deno.readDirSync(join(ROOT, "tests"))].filter((entry) =>
-    entry.isFile && entry.name.endsWith(".lua")
-  ).map((entry) => entry.name).sort().map((
-    name,
-  ) => [
-    nvim,
-    "--headless",
-    "-u",
-    "NONE",
-    "-i",
-    "NONE",
-    "--cmd",
-    "let g:diffreel_daemon = $DIFFREEL_DAEMON",
-    "-l",
-    "tests/" + name,
-  ]);
+export function commandsFor(
+  nvim: string,
+  daemon: string,
+  output: string,
+): TestCommand[] {
+  const commands: TestCommand[] = [...Deno.readDirSync(join(ROOT, "tests"))]
+    .filter((entry) => entry.isFile && entry.name.endsWith(".lua")).map((
+      entry,
+    ) => entry.name).sort().map((
+      name,
+    ) => ({
+      command: [
+        nvim,
+        "--headless",
+        "-u",
+        "NONE",
+        "-i",
+        "NONE",
+        "--cmd",
+        "let g:diffreel_daemon = $DIFFREEL_DAEMON",
+        "-l",
+        "tests/" + name,
+      ],
+    }));
   const unit = [...Deno.readDirSync(join(ROOT, "tests"))].filter((entry) =>
     entry.isFile && entry.name.endsWith("_test.ts")
   ).map((entry) => "tests/" + entry.name).sort();
-  commands.push([Deno.execPath(), "test", "--frozen", "-A", ...unit]);
+  const append = (command: string[], exclusive = false) =>
+    commands.push({ command, exclusive });
+  append([Deno.execPath(), "test", "--frozen", "-A", ...unit], true);
   for (
     const name of ["daemon_shutdown", "pr_backend", "pr_ui", "pr_lifecycle"]
-  ) commands.push(denoArgs(`tests/${name}.ts`));
+  ) append(denoArgs(`tests/${name}.ts`));
   for (const name of ["highlights_ui", "inline_ui", "e2e"]) {
-    commands.push(
+    append(
       denoArgs(
         `tests/${name}.ts`,
         "--output",
@@ -67,7 +57,7 @@ async function main() {
       ),
     );
   }
-  commands.push(
+  append(
     denoArgs(
       "tests/stability.ts",
       "--daemon",
@@ -77,8 +67,9 @@ async function main() {
       "--cases",
       ...Object.keys(CASES).filter((name) => name !== "syntax-switch"),
     ),
+    true,
   );
-  commands.push(
+  append(
     denoArgs(
       "tests/exploratory.ts",
       "--daemon",
@@ -87,7 +78,7 @@ async function main() {
       join(output, "exploratory"),
     ),
   );
-  commands.push(
+  append(
     denoArgs(
       "tests/stateful.ts",
       "--output",
@@ -100,37 +91,57 @@ async function main() {
       "--steps",
       "40",
     ),
+    true,
   );
-  const results = [];
-  for (const [index, command] of commands.entries()) {
-    const started = now();
-    let passed = false, log = "";
-    try {
-      const result = await run(command, {
-        cwd: ROOT,
-        env,
-        check: false,
-        timeout: 600,
-      });
-      passed = result.success;
-      log = result.stdout + result.stderr;
-    } catch (error) {
-      log = failure(error);
-    }
-    write(join(output, String(index).padStart(2, "0") + ".log"), log);
-    const result = {
-      command,
-      backend: "rust",
-      configuration: "minimal",
+  return commands;
+}
+
+async function main() {
+  const args = argumentsFor(
+    { daemon: "", output: ".wadackel/qa/ci", jobs: 1 },
+    ["daemon"],
+  );
+  const jobs = Number(args.jobs);
+  validateJobs(jobs);
+  const output = resolve(String(args.output)),
+    daemon = resolve(String(args.daemon));
+  mkdir(output);
+  const nvim = executable("nvim");
+  assert(nvim, "Neovim must be available on PATH");
+  const denoDir = resolve(
+    JSON.parse((await run([Deno.execPath(), "info", "--json"])).stdout).denoDir,
+  );
+  const environment = {
+    platform: `${Deno.build.os}-${Deno.build.arch}`,
+    nvim,
+    nvim_version: lines((await run([nvim, "--version"])).stdout)[0],
+    git_version: (await run(["git", "--version"])).stdout.trim(),
+    deno_version: Deno.version,
+    deno_dir: denoDir,
+    daemon,
+    daemon_build: JSON.parse((await run([daemon, "--build-info"])).stdout),
+    jobs,
+  };
+  json(join(output, "environment.json"), environment);
+  const started = now();
+  try {
+    const results = await runSuite(commandsFor(nvim, daemon, output), {
+      jobs,
+      cwd: ROOT,
+      output,
       daemon,
-      passed,
+      env: {
+        ...Deno.env.toObject(),
+        DIFFREEL_DAEMON: daemon,
+        DENO_DIR: denoDir,
+      },
+    });
+    Deno.exitCode = results.every((result) => result.passed) ? 0 : 1;
+  } finally {
+    json(join(output, "environment.json"), {
+      ...environment,
       seconds: Number((now() - started).toFixed(3)),
-    };
-    results.push(result);
-    console.log(JSON.stringify(result));
-    if (!passed) console.log(log);
-    json(join(output, "results.json"), results);
+    });
   }
-  Deno.exitCode = results.every((result) => result.passed) ? 0 : 1;
 }
 if (import.meta.main) await main();

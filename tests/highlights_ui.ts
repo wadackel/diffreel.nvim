@@ -37,7 +37,7 @@ async function main() {
   const args = argumentsFor({ output: ".wadackel/qa/highlights-ui" });
   const out = resolve(String(args.output));
   mkdir(out);
-  using temp = temporary("highlight-", out);
+  using temp = temporary("highlight-" + "nested-".repeat(24), out);
   const root = temp.path;
   await git(root, "init", "-qb", "main");
   mkdir(join(root, "dir"));
@@ -107,7 +107,14 @@ async function main() {
     nvim.capture(out, "help");
     await nvim.lua("require('diffreel.popup').close(v); plugin.show_path(v)");
     await flush(nvim);
-    assertEquals(style(nvim, root).foreground, 0xcc11aa);
+    assertEquals(
+      await nvim.lua(
+        "return vim.api.nvim_buf_get_lines(v.path_popup.buf,0,1,false)[1]",
+      ),
+      join(root, "dir/alpha.txt"),
+    );
+    // Searching for the full path in one screen row fails when the checkout path wraps.
+    assertEquals(style(nvim, root.slice(0, 32)).foreground, 0xcc11aa);
     nvim.capture(out, "path");
     await nvim.lua(
       "require('diffreel.popup').close(v,'path_popup'); plugin.set_explorer(v,{visible=false}); plugin.setup({on_highlight=false}); plugin.set_explorer(v,{visible=true,mode='list'})",

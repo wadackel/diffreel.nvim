@@ -21,15 +21,15 @@ nvim --headless -u NONE -i NONE -l tests/startup.lua
 nvim --headless -u NONE -i NONE -l tests/health.lua
 ```
 
-The real HTTP/concurrent-editor fixture needs a daemon built with the current ID. From the repository root:
+The real HTTP/concurrent-editor fixture needs a daemon built with the current ID. From the repository root inside `nix develop`:
 
 ```sh
 diffreel_build_id=$(nvim --headless -u NONE -i NONE -l scripts/build-id.lua)
-DIFFREEL_BUILD_ID="$diffreel_build_id" cargo +1.97.1 build --locked --manifest-path daemon/Cargo.toml
+DIFFREEL_BUILD_ID="$diffreel_build_id" cargo build --locked --manifest-path daemon/Cargo.toml
 deno run --frozen -A tests/install_integration.ts --daemon daemon/target/debug/diffreel-daemon
 ```
 
-This local test binary can use development-toolchain libraries; it is not a release artifact. The fixture exercises concurrent installs, verified cache use, corruption/retry, close and exit during fetch, fresh installation/update hooks, and rollback. Unit-level installer tests cover malformed artifacts, HTTP failures and missing curl, timeout, and stale callbacks.
+Outside Nix, select the pinned rustup compiler with `cargo +1.97.1 build` instead. This local test binary can use development-toolchain libraries; it is not a release artifact. The fixture exercises concurrent installs, verified cache use, corruption/retry, close and exit during fetch, fresh installation/update hooks, and rollback. Unit-level installer tests cover malformed artifacts, HTTP failures and missing curl, timeout, and stale callbacks.
 
 ## Release workflow
 
@@ -42,7 +42,20 @@ The [CI workflow](../.github/workflows/ci.yml) validates four native targets:
 | aarch64-unknown-linux-musl | ubuntu-24.04-arm | Static ELF for arm64 |
 | x86_64-unknown-linux-musl | ubuntu-24.04 | Static ELF for x86_64 |
 
-CI uses Neovim 0.12.5 and Git 2.55.0. Native jobs build an absent ID or reuse a validated complete release, execute the binary, and run Rust and Neovim tests. Release builds run outside Nix; macOS artifacts must not link Nix-store or Homebrew libraries.
+CI runs `just check` in the pinned Nix `ci` shell on Linux x86_64 and Apple Silicon alongside the native jobs. Native CI uses Neovim 0.12.5 and Git 2.55.0, reads the Rust version from `distribution.json`, builds an absent ID or reuses a validated complete release, executes the binary, and runs Rust and Neovim tests. Release builds run outside Nix; macOS artifacts must not link Nix-store or Homebrew libraries.
+
+```mermaid
+flowchart LR
+    identity --> native[Native checks: four targets]
+    native --> publish
+    check[Static checks: Linux and macOS] --> publish
+    identity --> publish
+    publish --> consumer[Consumer checks: four targets]
+```
+
+Native jobs expose separate binary-validation, Rust-test, Lua/Deno-test, and installation-test steps. The Lua/Deno runner uses `--jobs 2`, with exclusive suites described in the [development guide](development.md#suite-coverage). New commits cancel superseded runs of the same PR. Main pushes and manual runs have distinct workflow concurrency groups; the existing per-build-ID publication lock still serializes releases.
+
+Rust dependency caches cover `daemon/target` and Cargo dependencies, excluding workspace crates and installed Cargo commands. The selected Rust toolchain, Cargo manifests/lockfiles, target, runner image, and native build script participate in cache selection. Toolchain selection occurs before restore. Deno's native and consumer jobs cache dependencies by job, OS/architecture, and a hash of `.deno-version`, `deno.json`, and `deno.lock`. A cache hit never skips a test or binary validation. The Nix static-check shell retains its own store cache.
 
 Only trusted main pushes and manual main workflow runs can publish. Publication is serialized per ID. All four executables and `manifest.json` are uploaded and verified while the release is a draft, then published as an exact-ID prerelease. Completed releases remain immutable; UI-only changes reuse them. Old release IDs remain available for pinned plugins and rollback.
 
@@ -58,6 +71,8 @@ ravelact permissions --root . --no-cache
 ravelact secrets --root . --no-cache
 ravelact wiring --root . --no-cache
 ```
+
+For timing comparisons, retain the run URL, source and executable identities, job/step durations, queue time, and cache-hit status. Compare equivalent changes with the same tool versions and test coverage, separating cold-cache and warm-cache runs. Use several runs before interpreting differences, and distinguish local suite timings from GitHub runner timings. Keep raw evidence under `.wadackel/qa/`; do not put historical pass counts or speed claims in the workflow instructions.
 
 ## Public availability
 

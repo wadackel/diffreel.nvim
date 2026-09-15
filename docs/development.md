@@ -6,25 +6,52 @@ This guide covers a local checkout and isolated tests. Start with [contributing]
 - [Choose checks by the change](#choose-checks-by-the-change)
 - [Try the checkout in Neovim](#try-the-checkout-in-neovim)
 - [Documentation and captures](#documentation-and-captures)
-- [Optional Nix environment](#optional-nix-environment)
+- [Nix package and tool updates](#nix-package-and-tool-updates)
 - [Maintainer checks](#maintainer-checks)
 
 ## Build and test
 
-Use macOS or Linux with the [runtime prerequisites](../README.md#requirements), Deno 2.9.5 (pinned in [`.deno-version`](../.deno-version)), and Rust/Cargo. The commands below use rustup to select the compiler pinned in [daemon/rust-toolchain.toml](../daemon/rust-toolchain.toml). Personal Neovim configuration, language servers, and Nix are not required for the isolated suites.
+Install [Nix with flakes enabled](https://nix.dev/concepts/flakes), clone the repository, and run these commands from its root:
 
-A native linker and platform development files are also required: install Xcode Command Line Tools on macOS, or a C compiler/linker and standard development headers on Linux (for example, `build-essential` on Debian/Ubuntu). rustup does not install these system tools. Install StyLua separately to run the Lua formatting checks; rustfmt is included in the toolchain command below.
+```sh
+nix develop
+just versions
+just check
+just build
+just test .wadackel/qa/local-ci
+```
 
-Clone the repository, then run these commands from its root:
+The development shell supports Apple Silicon macOS and Linux arm64/x86_64. [flake.lock](../flake.lock) pins Rust/Cargo, rustfmt, Clippy, Deno, Neovim, Git, StyLua, just, nixfmt, and the native build environment. Intel Mac contributors can use the [non-Nix setup](#without-nix); the plugin and distribution CI continue to support Intel Macs.
+
+For a single command, use `nix develop --command just check`. Inside the shell, use plain `cargo`: the Nix compiler is already selected, and rustup's `cargo +version` syntax does not apply. Personal Neovim configuration and language servers are not required for the isolated suites. Dependencies are fetched on first use; the test commands use the committed Deno and Cargo lockfiles.
+
+| Command | Purpose |
+|---|---|
+| `just` | List available commands |
+| `just versions` | Show development tool paths and versions |
+| `just format` | Format Lua, Rust, TypeScript, and Nix |
+| `just check` | Check formatting and run Deno lint and type checks |
+| `just build` | Build the debug daemon with locked dependencies |
+| `just test [output] [jobs]` | Build the daemon, run Rust tests, then run the isolated Lua/Deno suite |
+
+`just test` defaults to `.wadackel/qa/local-ci` and one job; pass a distinct output directory to retain each run. Use `just test .wadackel/qa/parallel 2` for up to two concurrent suite commands. Cargo output is written to `daemon/target`, and the suite receives the absolute path to `daemon/target/debug/diffreel-daemon`. Local Cargo builds identify as `local` and work with an explicit daemon path. Clippy is available for focused checks but is not part of `just check`.
+
+CI runs `nix develop .#ci --command just check` on Linux x86_64 and Apple Silicon. The smaller `ci` shell provides static-check tools without the editor or native linker. The four native distribution jobs start after identity resolution, alongside the static checks, and use two suite jobs. Publication requires all static and native checks to pass.
+
+### Without Nix
+
+Use macOS or Linux with the [runtime prerequisites](../README.md#requirements), Deno 2.9.5 (pinned in [`.deno-version`](../.deno-version)), and rustup. [daemon/rust-toolchain.toml](../daemon/rust-toolchain.toml) pins the Rust compiler. Install StyLua 2.5.2 separately for Lua formatting checks.
+
+A native linker and platform development files are also required: install Xcode Command Line Tools on macOS, or a C compiler/linker and standard development headers on Linux (for example, `build-essential` on Debian/Ubuntu). rustup does not install these system tools.
+
+From the repository root:
 
 ```sh
 rustup toolchain install 1.97.1 --profile minimal --component rustfmt
 cargo +1.97.1 build --locked --manifest-path daemon/Cargo.toml
-deno install --entrypoint scripts/*.ts tests/*.ts benchmarks/*.ts
+deno install --frozen --entrypoint scripts/*.ts tests/*.ts benchmarks/*.ts
 deno task check
 ```
-
-The executable is `daemon/target/debug/diffreel-daemon`. Local Cargo builds identify as `local` and work with an explicit daemon path.
 
 For a baseline Rust and UI check:
 
@@ -44,7 +71,13 @@ deno task test \
   --output .wadackel/qa/local-ci
 ```
 
-This runs headless Lua tests, daemon shutdown, fixture checks, inline UI, UI/LSP integration, stability, exploratory regressions, and seeded stateful operation sequences. Each run records its executable and runtime versions in `environment.json`. It uses the TypeScript LSP server supplied in the repository. The `syntax-switch` case is excluded because it requires an installed Lua Tree-sitter parser; process-accounting tests run only on macOS. Rust unit tests are run separately by the command above.
+### Suite coverage
+
+Both `just test` and `deno task test` run headless Lua tests, daemon shutdown, fixture checks, inline UI, UI/LSP integration, stability, exploratory regressions, and seeded stateful operation sequences. Each run records its executable and runtime versions in `environment.json`. The suite uses the TypeScript LSP server supplied in the repository. The `syntax-switch` case is excluded because it requires an installed Lua Tree-sitter parser; process-accounting tests run only on macOS. `just test` also runs Rust unit tests; when using `deno task test` directly, run those separately.
+
+The runner accepts `--jobs <positive integer>`; the default is `1`. Each command receives its own HOME and XDG directories, while Deno dependencies share the parent's resolved `DENO_DIR`. Deno unit tests (including CPU accounting), stability, and stateful exploration run exclusively: the runner drains active commands before starting them and starts no other commands until they finish. Rust and installation tests remain separate, sequential CI steps.
+
+Numbered logs and `results.json` retain command-list order even when commands finish out of order. Results are saved after each completion. A failing command does not skip later commands; the runner exits unsuccessfully once all commands finish. `environment.json` records `jobs` and the suite's elapsed `seconds`. Use `--jobs 1` when investigating timing-sensitive failures, and retain evidence from both execution modes.
 
 `deno task check` checks formatting, lint rules, and types for the TypeScript tools.
 `deno task test:unit` runs the `*_test.ts` tests; individual files in that group
@@ -62,8 +95,8 @@ virtual environment are not needed. Deno is not a plugin runtime dependency.
 
 | Build or caller | Executable selection |
 |---|---|
-| Cargo debug / release | `daemon/target/debug/diffreel-daemon` / `daemon/target/release/diffreel-daemon` |
-| Nix | `result/bin/diffreel-daemon` |
+| Cargo debug / release, including the Nix development shell | `daemon/target/debug/diffreel-daemon` / `daemon/target/release/diffreel-daemon` |
+| `nix build` package | `result/bin/diffreel-daemon` |
 | Plugin | Explicit `daemon` option, then `vim.g.diffreel_daemon`, then managed cache |
 | Headless Lua tests | Pass `g:diffreel_daemon`; tests may also read `DIFFREEL_DAEMON` |
 | Deno UI/shutdown tests | Set absolute `DIFFREEL_DAEMON` |
@@ -73,7 +106,7 @@ Building one executable does not update a configuration pointing at another. Lua
 
 ## Choose checks by the change
 
-Use the baseline and the applicable rows below. All Lua filenames are under `tests/`; run them using the same headless invocation and daemon environment as `tests/ui.lua` above.
+Use `just build` and the applicable rows below inside `nix develop`. All Lua filenames are under `tests/`; run them using the same headless invocation and daemon environment as `tests/ui.lua` above. For focused Rust tests, use `cargo test --locked --manifest-path daemon/Cargo.toml`; outside Nix, select the pinned compiler with `cargo +1.97.1 test` instead.
 
 | Changed behavior | Focused checks |
 |---|---|
@@ -148,13 +181,12 @@ network tools; they do not require an installed or authenticated GitHub CLI.
 ### Formatting
 
 ```sh
-stylua --check lua plugin tests benchmarks scripts
-cargo +1.97.1 fmt --check --manifest-path daemon/Cargo.toml
+just check
 git diff --check
 git diff --cached --check
 ```
 
-StyLua uses [stylua.toml](../stylua.toml). Use `nix fmt -- flake.nix daemon/package.nix` when editing Nix files; that command rewrites them.
+Run `just format` to apply formatting. StyLua uses [stylua.toml](../stylua.toml). Without Nix, use `stylua --check lua plugin tests benchmarks scripts`, `cargo +1.97.1 fmt --check --manifest-path daemon/Cargo.toml`, and `deno task check`. Nix files can be formatted with `nix fmt -- flake.nix daemon/package.nix`.
 
 ### Evidence
 
@@ -223,9 +255,9 @@ The script creates a deterministic sample Git repository, opens a minimal Neovim
 
 Review the PNG for clipping, glyph alignment, readable diff colors, and agreement with the caption, then copy it into `docs/assets/review.png`. Keep raw captures in the ignored output directory. The helper verifies the scene before capture; it is not a replacement for the UI test suites.
 
-## Optional Nix environment
+## Nix package and tool updates
 
-On macOS, [flake.lock](../flake.lock) pins the daemon toolchain and dependencies:
+On Apple Silicon, the Flake also provides a packaged daemon:
 
 ```sh
 nix build .#default
@@ -233,6 +265,12 @@ nix flake check
 ```
 
 Select `result/bin/diffreel-daemon` explicitly in configuration and tests. Nix includes Git-tracked files and their working-tree edits; stage new build inputs before building so they are included. The package runs Rust tests during its build, but an already realized successful package may be reused. It does not run the Neovim or Deno suites.
+
+The Linux outputs provide development shells and a formatter; use `just build` for a local Linux daemon. Intel Mac has no Flake outputs because the pinned nixpkgs no longer supports that platform.
+
+To update the tools, run `nix flake update`, then review the resulting versions. Flake evaluation requires Rust/Cargo, rustfmt, and Clippy to match [daemon/rust-toolchain.toml](../daemon/rust-toolchain.toml) and [distribution.json](../distribution.json), and Deno to match [`.deno-version`](../.deno-version). Update those pins together with the lockfile, or choose a compatible nixpkgs revision. Errors report the expected and actual versions.
+
+After updating, run `nix flake check --all-systems --no-build`, `nix develop --command just versions`, `nix develop --command just check`, and `nix develop --command just test`. Review the non-Nix tool versions in this guide and the Neovim/Git versions and download checksums in [scripts/setup-ci.ts](../scripts/setup-ci.ts) so native CI stays aligned. Rust/Deno pin updates affect daemon identity; follow the [distribution checks](maintenance.md#distribution-identity-and-validation). The Flake lockfile itself is not a release build input, and release builds run outside the development shell.
 
 ## Maintainer checks
 

@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   GH_PROMPT_DISABLED: '1'
   GH_DEBUG: ''
@@ -16,6 +20,22 @@ env:
   GH_NO_UPDATE_NOTIFIER: '1'
 
 jobs:
+  check:
+    name: check (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+      - run: nix flake check --all-systems --no-build --no-update-lock-file
+      - run: nix develop .#ci --no-update-lock-file --command just check
+
   identity:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -60,27 +80,42 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version-file: .deno-version
+          cache: true
+          cache-hash: ${{ hashFiles('.deno-version', 'deno.json', 'deno.lock') }}
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y musl-tools libcurl4-openssl-dev libssl-dev zlib1g-dev
       - run: deno run --frozen -A scripts/setup-ci.ts
-      - run: |
+      - name: Select Rust toolchain
+        id: toolchain
+        run: |
           test "$(nvim --headless -u NONE -i NONE -l scripts/build-id.lua)" = "$BUILD_ID"
           nvim --version | head -1
           git --version
-          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+          rust_version=$(deno eval --no-config 'console.log(JSON.parse(Deno.readTextFileSync("distribution.json")).rust)')
+          echo "RUSTUP_TOOLCHAIN=$rust_version" >> "$GITHUB_ENV"
+          echo "image=${ImageOS:?}-${ImageVersion:?}" >> "$GITHUB_OUTPUT"
+          rustup toolchain install "$rust_version" --profile minimal
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: daemon -> target
+          key: ${{ matrix.target }}-${{ steps.toolchain.outputs.image }}-${{ hashFiles('scripts/build-daemon.sh') }}
+          cache-workspace-crates: false
+          cache-bin: false
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}
         run: deno run --frozen -A scripts/release.ts fetch "$BUILD_ID" .wadackel/qa/dist --target "$TARGET"
       - if: steps.release.outputs.reused != 'true'
         run: sh scripts/build-daemon.sh "$TARGET" .wadackel/qa/dist "$BUILD_ID"
-      - run: |
-          deno run --no-config -A scripts/validate-daemon.ts ".wadackel/qa/dist/diffreel-daemon-$TARGET" "$TARGET" "$BUILD_ID"
-          deno task check
-          cargo +1.97.1 fmt --check --manifest-path daemon/Cargo.toml
-          cargo +1.97.1 test --locked --manifest-path daemon/Cargo.toml
-          deno task test --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET"
-          deno run --frozen -A tests/install_integration.ts --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET"
+      - name: Validate daemon
+        run: deno run --no-config -A scripts/validate-daemon.ts ".wadackel/qa/dist/diffreel-daemon-$TARGET" "$TARGET" "$BUILD_ID"
+      - name: Rust tests
+        run: cargo test --locked --manifest-path daemon/Cargo.toml
+      - name: Lua and Deno tests
+        run: deno task test --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET" --jobs 2
+      - name: Installation tests
+        run: deno run --frozen -A tests/install_integration.ts --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: daemon-${{ matrix.target }}
@@ -96,7 +131,7 @@ jobs:
           if-no-files-found: warn
 
   publish:
-    needs: [identity, native]
+    needs: [identity, check, native]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -138,6 +173,8 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version-file: .deno-version
+          cache: true
+          cache-hash: ${{ hashFiles('.deno-version', 'deno.json', 'deno.lock') }}
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libssl-dev zlib1g-dev
       - run: |
