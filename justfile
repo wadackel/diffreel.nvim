@@ -8,19 +8,25 @@ versions:
     @for tool in rustc cargo rustfmt cargo-clippy deno nvim git stylua just nixfmt; do command -v "$tool"; "$tool" --version; done
 
 format:
-    stylua lua plugin tests benchmarks scripts
+    stylua lua plugin tests benchmarks scripts docs/assets/vhs
     cargo fmt --manifest-path daemon/Cargo.toml
     deno fmt
     nixfmt flake.nix daemon/package.nix
 
 check:
-    stylua --check lua plugin tests benchmarks scripts
+    stylua --check lua plugin tests benchmarks scripts docs/assets/vhs
     cargo fmt --check --manifest-path daemon/Cargo.toml
     deno task check
     nixfmt --check flake.nix daemon/package.nix
 
 build:
     cargo build --locked --manifest-path daemon/Cargo.toml --target-dir daemon/target
+
+demo name:
+    deno run --frozen -A scripts/demo.ts "$1"
+
+demo-all:
+    deno run --frozen -A scripts/demo.ts all
 
 test output=".wadackel/qa/local-ci" jobs="1": build
     cargo test --locked --manifest-path daemon/Cargo.toml --target-dir daemon/target
