@@ -85,6 +85,80 @@ test("render cache tracks listing and compact settings alongside statistics", fu
   assert(counted[1].text:find("+1 -2", 1, true))
 end)
 
+test("status markers use the configured symbols and preserve buffer-only priority", function()
+  local expected = {
+    added = "",
+    modified = "",
+    deleted = "",
+    renamed = "",
+    metadata = "~",
+    limited = "!",
+    typechange = "T",
+    unchanged = "=",
+    missing = "∅",
+    buffer_only = "*",
+    unknown = "?",
+  }
+  for status, marker in pairs(expected) do
+    local entry = { path = "file.lua", status = status, buffer_only = status == "buffer_only" }
+    if entry.buffer_only then
+      entry.status = "modified"
+    end
+    local defaults = explorer.rows({ entry }, {}, 35)
+    assert(defaults[1].text:sub(defaults[1].marker_col + 1) == marker, status)
+    local custom = explorer.rows({ entry }, {}, 35, nil, nil, { status_icons = { [status] = "◆" } })
+    assert(custom[1].text:sub(custom[1].marker_col + 1) == "◆", status)
+  end
+  local unknown = explorer.rows({ { path = "file", status = "future-status" } }, {}, 35)
+  assert(unknown[1].text:sub(unknown[1].marker_col + 1) == "?")
+end)
+
+test("status marker width and byte spans survive clipping, statistics and resizing", function()
+  local values = entries({ "src/deep/長いファイル名のテスト.lua" })
+  local statistics = { [values[1].path] = { additions = 12, deletions = 3 } }
+  for _, mode in ipairs({ "tree", "list" }) do
+    for _, compact in ipairs({ false, true }) do
+      for _, marker in ipairs({ "", "~", "変更", "[M]" }) do
+        for _, stats in ipairs({ false, statistics }) do
+          local tree = explorer.build(values)
+          for _, width in ipairs({ 40, 26, 60 }) do
+            local rows = explorer.rows(values, {}, width, tree, stats or nil, {
+              mode = mode,
+              compact = compact,
+              status_icons = { modified = marker },
+            })
+            local row = rows[#rows]
+            assert(vim.fn.strdisplaywidth(row.text) == width - 1, row.text)
+            assert(row.text:sub(row.marker_col + 1) == marker)
+            local span = row.highlights[#row.highlights]
+            assert(span.group == "DiffreelExplorerModifiedMarker")
+            assert(span.first == row.marker_col and span.last == #row.text)
+            if stats then
+              assert(row.text:find("+12 -3", 1, true))
+            end
+          end
+        end
+      end
+    end
+  end
+end)
+
+test("status icon changes invalidate a cached render even when the input table is reused", function()
+  local values = entries({ "a/b/file" })
+  local tree, folds = explorer.build(values), { ["a/b"] = true }
+  local settings = { status_icons = { modified = "~" } }
+  local folded = explorer.rows(values, folds, 35, tree, nil, settings)
+  assert(#folded == 2)
+  folds["a/b"] = nil
+  local first = explorer.rows(values, folds, 35, tree, nil, settings)
+  assert(explorer.rows(values, folds, 35, tree, nil, settings) == first)
+  settings.status_icons.modified = "変更"
+  local second = explorer.rows(values, folds, 35, tree, nil, settings)
+  assert(second ~= first and second[#second].text:sub(second[#second].marker_col + 1) == "変更")
+  assert(first[#first].text:sub(first[#first].marker_col + 1) == "~")
+  assert(explorer.rows(values, folds, 35, tree, nil, settings) == second)
+end)
+
 for _, err in ipairs(failures) do
   io.stderr:write(err .. "\n")
 end

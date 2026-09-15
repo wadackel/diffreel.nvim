@@ -25,7 +25,7 @@ local ok, err = xpcall(function()
           last = span.last
         end
         if row.entry then
-          assert(groups.DiffreelExplorerAddedMarker == "A")
+          assert(groups.DiffreelExplorerAddedMarker == "")
           assert(groups.DiffreelExplorerStatsAdd == "+12")
           assert(groups.DiffreelExplorerStatsDelete == "-3")
           assert(groups.DiffreelExplorerAddedName)

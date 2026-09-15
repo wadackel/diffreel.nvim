@@ -45,8 +45,12 @@ local function metrics(view)
   return result.git_spawns
 end
 local ok, err = xpcall(function()
-  plugin.setup({ watch = false })
-  local view = plugin.open({ root = root, selected_file = "src/deep/a", explorer = { visible = false } })
+  plugin.setup({ watch = false, explorer = { status_icons = { added = "+", modified = "~" } } })
+  local view = plugin.open({
+    root = root,
+    selected_file = "src/deep/a",
+    explorer = { visible = false, status_icons = { modified = "変更" } },
+  })
   ready(view)
   assert(view.explorer_win == nil and #vim.api.nvim_tabpage_list_wins(view.tab) == 2)
   local left, right, draft = view.left_win, view.right_win, view.right_buf
@@ -54,6 +58,27 @@ local ok, err = xpcall(function()
   local before, generation = metrics(view), view.comparison.generation
   plugin.set_explorer(view, { visible = true, compact = true })
   assert(view.explorer_win and #view.rows == 4 and view.rows[1].path == "src/deep")
+  local function marker()
+    local row = view.rows[#view.rows]
+    local line = vim.api.nvim_buf_get_lines(view.explorer_buf, #view.rows + 2, #view.rows + 3, false)[1]
+    assert(line == row.text, "Explorer buffer did not update its status icon")
+    return row.text:sub(row.marker_col + 1)
+  end
+  assert(marker() == "変更")
+  assert(view.explorer_options.status_icons.added == "+")
+  local override = { status_icons = { modified = "[M]" } }
+  plugin.set_explorer(view, override)
+  assert(marker() == "[M]")
+  override.status_icons.modified = "mutated"
+  assert(view.explorer_options.status_icons.modified == "[M]")
+  assert(plugin.config.explorer.status_icons.modified == "~")
+  assert(view.explorer_options.status_icons.added == "+")
+  local settings, rows = vim.deepcopy(view.explorer_options), view.rows
+  assert(not pcall(plugin.set_explorer, view, { status_icons = { modified = "\n" } }))
+  assert(vim.deep_equal(settings, view.explorer_options) and view.rows == rows)
+  local tabs = vim.api.nvim_list_tabpages()
+  assert(not pcall(plugin.open, { root = root, explorer = { status_icons = { modified = "" } } }))
+  assert(vim.deep_equal(tabs, vim.api.nvim_list_tabpages()))
   local panel = view.explorer_win
   vim.api.nvim_win_set_cursor(panel, { 5, 2 })
   for _, position in ipairs({ "bottom", "right", "top", "left" }) do
