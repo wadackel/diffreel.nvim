@@ -16,6 +16,28 @@ diffreel pairs a file explorer with Neovim's native diff. The working-tree pane 
 
 The Lua interface uses a Rust daemon for Git reads and monitoring. Prebuilt binaries install automatically; using the plugin does not require Rust, Cargo, Nix, or Deno. Deno runs the repository's development tools and tests.
 
+### Review in your preferred layout
+
+Use `gL` to cycle between side-by-side, stacked, and inline views. Each layout keeps the same working-tree buffer and unsaved edits.
+
+| Stacked | Inline |
+|---|---|
+| ![Committed Lua code above an editable working-tree buffer](docs/assets/layout-stacked.png) | ![Inline Lua diff with removed lines and an unsaved edit](docs/assets/layout-inline.png) |
+
+### Edit while reviewing
+
+Navigate native diff hunks, edit the working-tree pane, and switch files without losing your draft.
+
+![Moving between hunks, editing Lua code, and returning to an unsaved buffer after switching files](docs/assets/review-edit.gif)
+
+### Follow external changes
+
+Saved changes appear automatically. When the buffer has unsaved edits, diffreel keeps them and indicates that the buffer differs from disk.
+
+![An external edit updates the review, followed by another disk write that preserves an unsaved buffer](docs/assets/live-update.gif)
+
+These demos use [dogrun](https://github.com/wadackel/vim-dogrun) and [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons). The [development guide](docs/development.md#documentation-and-captures) explains how to regenerate them from VHS tapes.
+
 ## Requirements
 
 | Component | Requirement |

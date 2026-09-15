@@ -186,7 +186,7 @@ git diff --check
 git diff --cached --check
 ```
 
-Run `just format` to apply formatting. StyLua uses [stylua.toml](../stylua.toml). Without Nix, use `stylua --check lua plugin tests benchmarks scripts`, `cargo +1.97.1 fmt --check --manifest-path daemon/Cargo.toml`, and `deno task check`. Nix files can be formatted with `nix fmt -- flake.nix daemon/package.nix`.
+Run `just format` to apply formatting. StyLua uses [stylua.toml](../stylua.toml). Without Nix, use `stylua --check lua plugin tests benchmarks scripts docs/assets/vhs`, `cargo +1.97.1 fmt --check --manifest-path daemon/Cargo.toml`, and `deno task check`. Nix files can be formatted with `nix fmt -- flake.nix daemon/package.nix`.
 
 ### Evidence
 
@@ -242,18 +242,35 @@ Check relative links and anchors after moving sections. Lua snippets that are ta
 
 To check package-manager examples against uncommitted documentation, copy the working-tree files into a temporary Git repository. Use that local repository as the example's source URL: set an explicit `url = "file:///..."` field for lazy.nvim, or `src = "file:///..."` for `vim.pack`. Set XDG directories before starting Neovim, then verify plugin loading and help through lazy.nvim and `vim.pack`. This includes new help files without publishing a commit.
 
-Regenerate the README image on macOS with ImageMagick, its built-in MSVG renderer, and the system Menlo font:
+README images are recorded from a real Neovim terminal with [VHS](https://github.com/charmbracelet/vhs). Install VHS 0.11.0, its `ffmpeg` and `ttyd` dependencies, and **JetBrainsMono Nerd Font Mono** (the regular TTF must be installed and visible to Chromium). VHS uses Chromium for rendering and may download it on first use. On Linux, `fc-match` locates the font. Recording dependencies are optional and are not included in the normal development shell.
+
+From the repository root, build the daemon and generate one scene or all scenes:
 
 ```sh
-deno run --frozen -A scripts/capture-docs.ts \
-  --daemon "$PWD/daemon/target/debug/diffreel-daemon" \
-  --font /System/Library/Fonts/Menlo.ttc \
-  --output .wadackel/qa/docs-capture
+just build
+just demo review
+just demo-all
 ```
 
-The script creates a deterministic sample Git repository, opens a minimal Neovim session, captures the real UI, and exports `review.png`. It records versions, font checksum, daemon identity, configuration, and raw captures alongside the PNG. It does not use your normal editor configuration. Menlo is not bundled; another monospaced font file can be supplied with `--font`, but its metrics can change the image. The reference image uses Menlo and the documented renderer.
+Outside Nix, use `cargo +1.97.1 build --locked --manifest-path daemon/Cargo.toml` instead of `just build`. Set `DIFFREEL_DAEMON` to select another executable. Set `DIFFREEL_DEMO_FONT` to the installed `JetBrainsMonoNerdFontMono-Regular.ttf` if automatic discovery cannot locate it; this records the font's identity and does not install or change the font used by Chromium.
 
-Review the PNG for clipping, glyph alignment, readable diff colors, and agreement with the caption, then copy it into `docs/assets/review.png`. Keep raw captures in the ignored output directory. The helper verifies the scene before capture; it is not a replacement for the UI test suites.
+| Scene | Output | Content |
+|---|---|---|
+| `review` | `review.png` | Side-by-side diff and an unsaved working-tree edit |
+| `layout-stacked` | `layout-stacked.png` | The same comparison in stacked layout |
+| `layout-inline` | `layout-inline.png` | The same comparison in inline layout |
+| `review-edit` | `review-edit.gif` | Hunk navigation, editing, and draft retention across file switching |
+| `live-update` | `live-update.gif` | Filesystem updates and draft retention after an external write |
+
+The [tapes and recording configuration](assets/vhs/) share a fixed dogrun palette, font, dimensions, and fixture. [The runner](../scripts/demo.ts) pins dogrun and nvim-web-devicons to specific commits, downloads them into `.wadackel/qa/vhs/` on first use, and reuses clean cached checkouts. No plugin manager or personal Neovim configuration is loaded. Each recording gets a separate sample Git repository, HOME, and XDG directories. Git identity and commit dates are fixed; the real checkout, index, and global Git configuration are not modified.
+
+The tapes operate the editor with normal keys. Hidden checkpoints wait for the expected selection, layout, buffer text, disk content, and daemon snapshot; VHS waits for their completion before capturing. Sleeps control playback pacing. The live-update tape enables the real filesystem watcher and writes through a separate process. It never substitutes a manual refresh for monitoring.
+
+Successful recordings are copied into `docs/assets/`. Each run retains its fixture, tape/configuration copies, VHS log, final GIF screenshot, `verified.json`, and `capture.json` under `.wadackel/qa/vhs/<scene>-<run>/`. Evidence includes tool versions, font and daemon checksums, source identity, dependency commits, and the fixture baseline. Failed scene verification or recording leaves the previously published asset intact.
+
+Review PNGs and GIFs for clipping, icon alignment, readable diff colors, pacing, and agreement with their captions at README display size. Repeated runs must reproduce the scene state; byte-identical output across tool, platform, and font versions is not guaranteed. These scene checks do not replace the UI test suites.
+
+Run `deno test --frozen -A tests/demo_test.ts` for fixture reproducibility and failed-publication checks. `just demo` validates its tape before recording. To validate a retained copy independently, run `vhs validate 'tapes/*.tape'` from that run's directory.
 
 ## Nix package and tool updates
 
