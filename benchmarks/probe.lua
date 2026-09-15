@@ -48,7 +48,7 @@ function probe.explorer_matches(view)
       or stats.additions ~= expected_stats.additions
       or stats.deletions ~= expected_stats.deletions
       or not vim.deep_equal(stats.files, expected_stats.files)
-      or lines[#view.rows + 5] ~= "Saved lines: +" .. expected_stats.additions .. " -" .. expected_stats.deletions
+      or lines[#view.rows + 5] ~= " Saved lines: +" .. expected_stats.additions .. " -" .. expected_stats.deletions
     then
       return false
     end
@@ -117,9 +117,9 @@ function probe.explorer_matches(view)
     return false
   end
   if view.disk_conflict and not view.error then
-    return lines[#lines] == "Unsaved buffer differs from disk"
+    return lines[#lines] == " Unsaved buffer differs from disk"
   end
-  return lines[#lines] ~= "Unsaved buffer differs from disk"
+  return lines[#lines] ~= " Unsaved buffer differs from disk"
 end
 
 function probe.matches(view)

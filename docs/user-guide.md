@@ -412,7 +412,11 @@ See `:help diffreel-highlight-groups` for every public group and its default.
 
 ## Understand the review
 
-The pane headers identify a revision, the index, or the working-tree buffer. Neovim supplies diff alignment, hunk navigation, and synchronized folds. Highlight colors follow the current colorscheme, with stronger character-level changes and neutral filler rows.
+The pane headers emphasize the file name, dim its parent directories, and identify a revision, the index, or the working-tree buffer. Unsaved buffers use the modification color. Ordinary LF text needs no format label; CRLF, BOM, missing final newlines, and content limitations remain explicit.
+
+The explorer header shows the selected file's position, such as `2 / 12 files`, in the current tree or list order. A slim marker and a background highlight identify the selected file independently of the explorer cursor. HEAD-following reviews show `HEAD` in the explorer comparison; the revision pane retains the resolved commit ID.
+
+Neovim supplies diff alignment, hunk navigation, and synchronized folds. Line backgrounds blend with the current theme, while character-level changes use stronger colors. The explorer and pane headers share a subtle background. Transparent themes keep their native window backgrounds. Review windows use blank end-of-buffer and diff filler characters; other fill characters remain intact, and cleanup restores settings still owned by diffreel.
 
 The explorer uses these comparison markers:
 

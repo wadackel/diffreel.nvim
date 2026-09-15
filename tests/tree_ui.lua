@@ -395,7 +395,7 @@ test("refresh preserves the explorer cursor column and non-entry rows", function
   ready(view)
   local footer = vim.api.nvim_win_get_cursor(view.explorer_win)
   assert(
-    vim.api.nvim_buf_get_lines(view.explorer_buf, footer[1] - 1, footer[1], false)[1]
+    vim.trim(vim.api.nvim_buf_get_lines(view.explorer_buf, footer[1] - 1, footer[1], false)[1])
       == "Unsaved buffer differs from disk"
   )
   assert(footer[2] == 5)
@@ -461,12 +461,24 @@ test("reused rows retain selection highlights and current buffer-state messages"
     do
       if mark[4].line_hl_group == "DiffreelExplorerSelected" then
         assert(not found, "Multiple selected rows remained highlighted")
+        assert(vim.fn.strdisplaywidth(mark[4].virt_text[1][1]) == 1, "Selection marker covers the file icon")
         found = mark[2] + 1
       end
     end
     return found
   end
   assert(view.rows[selected_line() - 3].path == path)
+  local ambiwidth = vim.o.ambiwidth
+  local ok, err = pcall(function()
+    vim.o.ambiwidth = "double"
+    plugin.refresh(view)
+    ready(view)
+    assert(view.rows[selected_line() - 3].path == path)
+  end)
+  vim.o.ambiwidth = ambiwidth
+  plugin.refresh(view)
+  ready(view)
+  assert(ok, err)
   vim.api.nvim_buf_set_lines(view.right_buf, 0, -1, false, { "first draft" })
   assert(vim.wait(1000, function()
     return view.disk_conflict

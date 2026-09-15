@@ -19,6 +19,18 @@ local function brighter(value)
   return channel(16) * 65536 + channel(8) * 256 + channel(0)
 end
 
+local function blend(foreground, background, amount)
+  if not foreground or not background then
+    return foreground
+  end
+  local function channel(shift)
+    local front = math.floor(foreground / 2 ^ shift) % 256
+    local back = math.floor(background / 2 ^ shift) % 256
+    return math.floor(front * amount + back * (1 - amount) + 0.5)
+  end
+  return channel(16) * 65536 + channel(8) * 256 + channel(0)
+end
+
 local statuses = {
   Added = "DiffreelAdded",
   Modified = "DiffreelModified",
@@ -34,15 +46,16 @@ local statuses = {
 }
 
 function M.defaults()
+  local background, foreground = color("Normal", "bg"), color("Normal", "fg")
   local added = color("DiffAdd", "bg") or 0x1c394b
   local deleted = color("DiffDelete", "bg") or 0x513351
   local groups = {
-    DiffreelLineAdd = { bg = added },
-    DiffreelLineDelete = { bg = deleted },
-    DiffreelTextAdd = { bg = brighter(added) },
-    DiffreelTextDelete = { bg = brighter(deleted) },
+    DiffreelLineAdd = { bg = blend(added, background, 0.45) },
+    DiffreelLineDelete = { bg = blend(deleted, background, 0.45) },
+    DiffreelTextAdd = { bg = blend(brighter(added), background, 0.8) },
+    DiffreelTextDelete = { bg = blend(brighter(deleted), background, 0.8) },
     DiffreelFiller = { fg = color("NonText", "fg") or color("Comment", "fg"), bg = color("Normal", "bg") },
-    DiffreelSelected = { bg = color("Visual", "bg") or color("CursorLine", "bg"), bold = true },
+    DiffreelSelected = { bg = blend(color("Visual", "bg") or color("CursorLine", "bg"), background, 0.6), bold = true },
   }
   local links = {
     Title = "Title",
@@ -54,13 +67,29 @@ function M.defaults()
     ExplorerFileCount = "DiffreelDim",
     ExplorerRootName = "Directory",
     ExplorerComparison = "DiffreelDim",
-    ExplorerDirectoryName = "Directory",
-    ExplorerDirectoryIcon = "Directory",
+    ExplorerDirectoryName = "DiffreelDim",
+    ExplorerDirectoryIcon = "DiffreelDim",
     ExplorerSelected = "DiffreelSelected",
+    ExplorerSelectedMarker = "Directory",
     DiffFolded = "DiffreelDim",
     InlineDeleteNumber = "DiffreelLineDelete",
     DiffWinbarRevision = "DiffreelDim",
     DiffWinbarState = "DiffreelDim",
+    DiffWinbarDirectory = "DiffreelDim",
+    DiffWinbarModified = "DiffreelModified",
+    ExplorerStatsAdd = "DiffreelAdded",
+    ExplorerStatsDelete = "DiffreelDeleted",
+    ExplorerStatsPending = "DiffreelDim",
+    ExplorerStatsUnavailable = "DiffreelDim",
+    ExplorerSummary = "DiffreelDim",
+    ExplorerDetail = "DiffreelDim",
+    ExplorerLoading = "DiffreelDim",
+    ExplorerEmpty = "DiffreelDim",
+    ExplorerError = "DiagnosticError",
+    ExplorerConflict = "DiffreelModified",
+    ExplorerPaused = "DiffreelModified",
+    HelpKey = "Special",
+    HelpHint = "DiffreelDim",
   }
   for _, part in ipairs({ "Normal", "NormalNC", "WinSeparator", "WinBar", "WinBarNC" }) do
     links["Explorer" .. part], links["Diff" .. part] = part, part
@@ -81,25 +110,27 @@ function M.defaults()
     "ExplorerFileName",
     "ExplorerFileIcon",
     "ExplorerIndent",
-    "ExplorerStatsAdd",
-    "ExplorerStatsDelete",
-    "ExplorerStatsPending",
-    "ExplorerStatsUnavailable",
-    "ExplorerSummary",
-    "ExplorerDetail",
-    "ExplorerLoading",
-    "ExplorerEmpty",
-    "ExplorerError",
-    "ExplorerConflict",
-    "ExplorerPaused",
-    "HelpHeader",
-    "HelpKey",
     "HelpAction",
-    "HelpHint",
     "PathText",
-    "DiffWinbarPath",
   }) do
     groups["Diffreel" .. name] = {}
+  end
+  groups.DiffreelTitle = { fg = foreground, bold = true }
+  for _, name in ipairs({ "ExplorerRootName", "DiffWinbarPath", "HelpHeader" }) do
+    groups["Diffreel" .. name] = { bold = true }
+  end
+  if background and foreground then
+    local surface = blend(foreground, background, 0.04)
+    groups.DiffreelExplorerNormal = { fg = foreground, bg = surface }
+    groups.DiffreelExplorerNormalNC = { link = "DiffreelExplorerNormal" }
+    for _, scope in ipairs({ "Explorer", "Diff" }) do
+      groups["Diffreel" .. scope .. "WinBar"] = { fg = foreground, bg = surface }
+      groups["Diffreel" .. scope .. "WinBarNC"] = { link = "Diffreel" .. scope .. "WinBar" }
+      groups["Diffreel" .. scope .. "WinSeparator"] = {
+        fg = blend(color("WinSeparator", "fg") or foreground, background, 0.25),
+        bg = background,
+      }
+    end
   end
   for status, target in pairs(statuses) do
     local base = "DiffreelExplorer" .. status
