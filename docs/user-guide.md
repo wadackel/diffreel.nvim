@@ -36,7 +36,8 @@ Run these commands from a Git worktree:
 
 Revision expressions such as `HEAD~1`, branch names, and tags resolve once for a view. They remain fixed through refresh and daemon restart. A literal left `HEAD` with right `worktree` or index follows HEAD as commits change. This applies to argument-free `:Diffreel`, explicit `:Diffreel HEAD worktree`, `:Diffreel --staged`, and the Lua API. Merge-base comparisons always freeze their resolved commit endpoints, including across restart. Unrelated histories or multiple merge bases produce an explicit error.
 
-To keep the current HEAD fixed, run `git rev-parse HEAD` in the repository, copy the resulting commit ID, and pass that ID to `:Diffreel` as its first argument. A new view and a fixed baseline are separate choices: explicit arguments always create a view, but literal `HEAD` against `worktree` still follows HEAD.
+> [!TIP]
+> To keep the current HEAD fixed, run `git rev-parse HEAD` in the repository, copy the resulting commit ID, and pass that ID to `:Diffreel` as its first argument. A new view and a fixed baseline are separate choices: explicit arguments always create a view, but literal `HEAD` against `worktree` still follows HEAD.
 
 Each review has its own tab, comparison, and selected file. Argument-free `:Diffreel` closes the review in the current tab, including from an additional split. From an ordinary tab, it opens a HEAD-following review. The Lua `open()` API always creates a view.
 
@@ -55,7 +56,10 @@ Diffreel --pr=123 -- src tests
 Diffreel --pr=123 --file=src/main.lua
 ```
 
-The PR feature requires GitHub CLI (`gh`) on PATH and authentication with access to the target repository. Run `gh auth login` beforehand when needed. Normal local comparisons do not require `gh`. PR acquisition uses GitHub authentication without changing your credential-helper configuration.
+> [!IMPORTANT]
+> The PR feature requires GitHub CLI (`gh`) on PATH and authentication with access to the target repository. Run `gh auth login` beforehand when needed.
+
+Normal local comparisons do not require `gh`. PR acquisition uses GitHub authentication without changing your credential-helper configuration.
 
 A number uses gh's default repository for the local clone, ignoring the `GH_REPO` environment override. A URL identifies the repository explicitly; it must correspond to a configured remote or that remote's GitHub-reported fork parent. HTTPS and ordinary SSH remote URLs are recognized. Use `--repo=<local path>` to select another existing clone. No repository is cloned automatically, and this feature is GitHub-specific.
 
@@ -172,7 +176,8 @@ These are the default Normal-mode bindings. They can be changed with [keymaps](#
 | `g?` | Review panes | Show active diffreel mappings for this pane |
 | `q` | Review panes | Close the review tab |
 
-The `<Leader>gD` toggle mapping comes from the README examples; it is not installed by `setup()` itself. Set your leader before configuring the plugin.
+> [!NOTE]
+> The `<Leader>gD` toggle mapping comes from the README examples; it is not installed by `setup()` itself. Set your leader before configuring the plugin.
 
 The `g?` popup reflects resolved leaders, aliases, custom callbacks, disabled mappings, and later replacements. It lists only mappings still owned by diffreel in the active pane. Close the popup with `q`, Esc, or `g?`; the review and its unsaved text remain open.
 
@@ -215,7 +220,10 @@ Inline shows the same editable worktree buffer used by split views. PR, commit a
 
 Inline uses Neovim's experimental window-scoped namespace API (`nvim__ns_set` / `nvim__ns_get`), checked at runtime. `:checkhealth diffreel` reports availability with the current options. Inline requires `internal` in `diffopt` and supports Myers, minimal, patience and histogram algorithms, `iwhite`, `iwhiteall`, `iwhiteeol`, `iblank`, and native `linematch`. `icase`, a nonempty `diffexpr`, and `diffanchors` are unsupported. Split layouts retain Neovim's usual diff behavior.
 
-Each inline side is limited to **1 MiB and 20,000 lines**, including unsaved edits. Increasing `max_bytes` does not raise these limits. Oversized text is never truncated. An unsupported request leaves the current split intact. If content or options become unsupported while inline is active, decorations are cleared and the review returns to its most recent split layout (initially `side_by_side`), preserving the buffer and draft.
+> [!IMPORTANT]
+> Each inline side is limited to **1 MiB and 20,000 lines**, including unsaved edits. Increasing `max_bytes` does not raise these limits.
+
+Oversized text is never truncated. An unsupported request leaves the current split intact. If content or options become unsupported while inline is active, decorations are cleared and the review returns to its most recent split layout (initially `side_by_side`), preserving the buffer and draft.
 
 Removed lines are grouped at the start of each coarse changed block, in old-file order. Native `linematch` may split that block into several navigation stops; the deleted decorations do not interleave at those refined stops. Hunk movement, `ih`, character highlighting and context folds still use the native comparison. `[c` / `]c` operate within the file; `]h` / `[h` can continue across files. Opening a context fold is retained across inline updates and layout switching.
 
@@ -520,11 +528,12 @@ Unsupported content, stale disk reads, or a pair exceeding 4 MiB or 200,000 comb
 
 ### Unsaved edits and external writes
 
-When the file on disk changes, an unmodified real buffer can be updated for the review. A modified buffer keeps your text. The right header identifies it as unsaved, and the explorer indicates when it differs from disk. This indication is about buffer-versus-disk content, not a Git merge-conflict marker.
+When the file on disk changes, an unmodified real buffer can be updated for the review. A modified buffer keeps your text. The right header identifies it as unsaved, and the explorer indicates when it differs from disk. This indication is about buffer-versus-disk content, not a Git merge-conflict marker. It follows both text and buffer format options, including line endings, BOM, and the final newline.
 
 The draft remains available through external deletion, unsupported replacements, file selection, and closing the review. If the selected path disappears from Git's change list—for example, after a commit or ignore-rule change—diffreel retains the unsaved buffer as a `*` entry and compares it against the current resolved baseline and disk state.
 
-Saving is an ordinary Neovim write and writes your buffer to disk. diffreel does not merge external edits into a draft or provide a discard command. The indication follows both text and buffer format options, including line endings, BOM, and the final newline.
+> [!CAUTION]
+> Saving is an ordinary Neovim write and writes your buffer to disk. diffreel does not merge external edits into a draft or provide a discard command.
 
 ### Updates, hidden tabs, and failures
 
@@ -566,7 +575,10 @@ The cache is under `stdpath("data")/diffreel/daemon/<build ID>/<target>`. New ed
 
 ### Release versions and main
 
-The README follows the latest versioned release. During 0.x development, breaking changes increase the minor version, while features and fixes increase the patch version. Read the [changelog](../CHANGELOG.md) before updating; following all releases can cross a breaking version boundary.
+The README follows the latest versioned release. During 0.x development, breaking changes increase the minor version, while features and fixes increase the patch version.
+
+> [!WARNING]
+> Read the [changelog](../CHANGELOG.md) before updating; following all releases can cross a breaking version boundary.
 
 | Selection | lazy.nvim fields | vim.pack `version` |
 |---|---|---|

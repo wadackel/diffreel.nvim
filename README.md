@@ -1,4 +1,4 @@
-# diffreel.nvim
+# 🎞️ diffreel.nvim
 
 Review a changing Git worktree without leaving your editing environment.
 
@@ -8,13 +8,14 @@ diffreel pairs a file explorer with Neovim's native diff. The working-tree pane 
 
 ## Why diffreel?
 
-- **Review and edit together.** Use native diff navigation, folds, and your existing language tools in the working-tree buffer.
-- **Choose your layout.** Switch between side-by-side, stacked, and inline views while keeping the same working-tree buffer.
-- **Follow ongoing changes.** Filesystem monitoring updates the review as you, a formatter, a generator, or an AI coding tool changes files.
-- **Keep unfinished edits.** External writes, deletion, and file switching preserve unsaved text; the review indicates when buffer and disk differ.
-- **Choose your comparison.** Review the worktree, staged or unstaged changes, two revisions, or changes since a merge base. Limit each review to selected paths.
+- ✏️ **Review and edit together.** Use native diff navigation, folds, and your existing language tools in the working-tree buffer.
+- 🪟 **Choose your layout.** Switch between side-by-side, stacked, and inline views while keeping the same working-tree buffer.
+- 🔄 **Follow ongoing changes.** Filesystem monitoring updates the review as you, a formatter, a generator, or an AI coding tool changes files.
+- 🛡️ **Keep unfinished edits.** External writes, deletion, and file switching preserve unsaved text; the review indicates when buffer and disk differ.
+- 🔀 **Choose your comparison.** Review the worktree, staged or unstaged changes, two revisions, or changes since a merge base. Limit each review to selected paths.
 
-The Lua interface uses a Rust daemon for Git reads and monitoring. Prebuilt binaries install automatically; using the plugin does not require Rust, Cargo, Nix, or Deno. Deno runs the repository's development tools and tests.
+> [!NOTE]
+> The Lua interface uses a Rust daemon for Git reads and monitoring. Prebuilt binaries install automatically; using the plugin does not require Rust, Cargo, Nix, or Deno. Deno runs the repository's development tools and tests.
 
 ### Review in your preferred layout
 
@@ -54,8 +55,8 @@ Windows is not supported. File icons are optional and use `nvim-web-devicons` wh
 
 ## Install
 
-The examples follow the latest `vX.Y.Z` release. Before the first `v0.1.0`
-release is published, use the [main branch settings](docs/user-guide.md#release-versions-and-main).
+> [!IMPORTANT]
+> The examples follow the latest `vX.Y.Z` release. Before the first `v0.1.0` release is published, use the [main branch settings](docs/user-guide.md#release-versions-and-main).
 
 ### lazy.nvim
 
@@ -108,7 +109,8 @@ The first `:Diffreel` prepares the matching daemon asynchronously. To download i
 
 Argument-free `:Diffreel` toggles the current review tab. Explicit revisions create a new review: `:Diffreel HEAD~1` compares the previous commit with the worktree; `:Diffreel HEAD~1 HEAD` compares two fixed revisions.
 
-`HEAD` against `worktree` or the index follows new HEAD commits even when explicitly specified. Use a commit ID to keep a current-HEAD baseline fixed.
+> [!NOTE]
+> `HEAD` against `worktree` or the index follows new HEAD commits even when explicitly specified. Use a commit ID to keep a current-HEAD baseline fixed.
 
 ```vim
 Diffreel --staged
@@ -192,7 +194,10 @@ require("diffreel").setup({
 })
 ```
 
-With lazy.nvim, put the `keymaps` table inside `opts`. Set `keymaps.defaults = false` to start with only your bindings. Custom Lua callbacks are also supported. Close all review tabs before changing keymaps; unrelated settings and identical keymaps can still be passed to `setup()` while reviews are open.
+With lazy.nvim, put the `keymaps` table inside `opts`. Set `keymaps.defaults = false` to start with only your bindings. Custom Lua callbacks are also supported.
+
+> [!WARNING]
+> Close all review tabs before changing keymaps; unrelated settings and identical keymaps can still be passed to `setup()` while reviews are open.
 
 See [keymap customization](docs/user-guide.md#customize-keymaps) or `:help diffreel-keymaps` for all operations, callback arguments, and reset behavior.
 
@@ -240,8 +245,9 @@ Supported text retains UTF-8, BOM, line-ending, and final-newline metadata. Syml
 - [Contributing](CONTRIBUTING.md): report a problem or contribute a change.
 - [Development](docs/development.md) and [architecture](docs/architecture.md): build, test, and understand the implementation.
 
-For a local diagnostic report, run `:checkhealth diffreel`. It does not access the network.
+> [!TIP]
+> For a local diagnostic report, run `:checkhealth diffreel`. It does not access the network.
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 wadackel.
+[MIT © wadackel](LICENSE)
