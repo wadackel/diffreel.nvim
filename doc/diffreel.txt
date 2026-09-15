@@ -32,6 +32,17 @@ binary downloads need no GitHub authentication. Daemon downloads require curl
 on Neovim's PATH. A prepared cache requires no network or compiler.
 GitHub CLI authentication is needed only for |diffreel-pr|.
 
+The README follows versioned vX.Y.Z releases: lazy.nvim uses version = "*",
+and vim.pack uses version = vim.version.range("*"). To pin or roll back,
+select a published tag such as "v0.1.0", update through the plugin manager,
+and restart Neovim. Read CHANGELOG.md before updating; during 0.x development,
+breaking changes increase the minor version and features/fixes increase patch.
+
+Before the first versioned release, or to follow development, use
+version = false, branch = "main" with lazy.nvim, or version = "main" with
+vim.pack. New main commits can briefly precede their daemon's CI publication.
+daemon-<build ID> tags identify internal binaries, not plugin versions.
+
 From a Git worktree containing changes: >vim
     Diffreel
 <
