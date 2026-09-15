@@ -31,7 +31,7 @@ local ok, err = xpcall(function()
           assert(groups.DiffreelExplorerAddedName)
         else
           assert(groups.DiffreelExplorerDirectoryName)
-          assert(groups.DiffreelExplorerDirectoryIcon == "▾")
+          assert(groups.DiffreelExplorerDirectoryIcon == "󰝰")
         end
       end
     end

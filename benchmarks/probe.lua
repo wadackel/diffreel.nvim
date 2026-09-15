@@ -34,6 +34,11 @@ end
 
 function probe.explorer_matches(view)
   local lines = vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false)
+  local icons = view.ui_icons or { changes = "", warning = "" }
+  local footer, expected_footer = {}, ""
+  for i = #view.rows + 5, #lines do
+    footer[#footer + 1] = (lines[i]:gsub("^ +", ""))
+  end
   local expected_stats = _G.diffreel_expected_line_stats
   if expected_stats then
     local stats = view.statistics
@@ -48,16 +53,20 @@ function probe.explorer_matches(view)
       or stats.additions ~= expected_stats.additions
       or stats.deletions ~= expected_stats.deletions
       or not vim.deep_equal(stats.files, expected_stats.files)
-      or lines[#view.rows + 5] ~= " Saved lines: +" .. expected_stats.additions .. " -" .. expected_stats.deletions
     then
       return false
     end
+    expected_footer = icons.changes .. " Saved lines: +" .. expected_stats.additions .. " -" .. expected_stats.deletions
+  end
+  if view.disk_conflict then
+    expected_footer = expected_footer .. icons.warning .. " Unsaved buffer differs from disk"
   end
   if
     view.error
     or view.navigation
     or view.updating
-    or #lines ~= #view.rows + 4 + (view.disk_conflict and 1 or 0) + (expected_stats and 1 or 0)
+    or #lines < #view.rows + 4
+    or table.concat(footer) ~= expected_footer
   then
     return false
   end
@@ -116,10 +125,7 @@ function probe.explorer_matches(view)
   if #marks ~= count or #selected ~= (selected_row and 1 or 0) or selected[1] ~= selected_row then
     return false
   end
-  if view.disk_conflict and not view.error then
-    return lines[#lines] == " Unsaved buffer differs from disk"
-  end
-  return lines[#lines] ~= " Unsaved buffer differs from disk"
+  return true
 end
 
 function probe.matches(view)

@@ -24,8 +24,8 @@ LSP behavior. External disk changes do not overwrite unsaved buffer text.
 
 Requirements: Neovim 0.12+, Git 2.55+, and either macOS 14+ or Linux, on arm64
 or x86_64. Windows is not supported. File icons optionally use
-nvim-web-devicons. Default Git status icons need a Nerd Font; use
-|diffreel-status-icons| to choose other symbols.
+nvim-web-devicons. Default UI and Git status icons need a Nerd Font; use
+|diffreel-ui-icons| and |diffreel-status-icons| to choose other symbols.
 LSP support depends on your existing language server configuration.
 
 Install with lazy.nvim or |vim.pack| using the README examples. Source and
@@ -202,7 +202,9 @@ Customize them with |diffreel-keymaps|.
                                                          *diffreel-keymap-help*
 g? shows a popup with the active pane's installed diffreel mappings. Resolved
 leaders, aliases, disabled keys and later replacements are reflected. Custom
-functions appear as Custom callback. Close help with q, <Esc> or g?; closing
+functions appear as Custom action. Built-in actions use readable labels;
+configuration still uses operation IDs such as next_file. Close help with
+q, <Esc> or g?; closing
 help preserves the review, selection and unsaved buffers.
 
 File navigation follows explorer order, including files in folded branches.
@@ -604,6 +606,45 @@ explorer.status_icons: table
     a view. Multiple-character and wide symbols reserve their display width
     when clipping names and aligning the status column.
 
+                                                          *diffreel-ui-icons*
+ui_icons: table (setup() only)
+    Symbols for headers, folders, status messages and popup titles:
+        changes                repository       
+        commit                 index            
+        worktree               empty            ∅
+        pull_request           unsaved          
+        directory_closed 󰉋      directory_open   󰝰
+        loading                paused           
+        warning                error            
+        clean                  help             
+        path            
+
+    Keys merge into current defaults; each view copies them when opened.
+    Later setup() calls leave existing views and popups unchanged. Inputs
+    are copied. Unknown keys, empty strings and control characters are
+    rejected before changing configuration. Multi-character symbols work.
+
+    Defaults need a Nerd Font; fonts are not auto-detected. For other fonts: >lua
+        require("diffreel").setup({
+          ui_icons = {
+            changes = "~", repository = "R", commit = "@", index = "I",
+            worktree = "W", empty = "0", pull_request = "PR", unsaved = "*",
+            directory_closed = ">", directory_open = "v", loading = "~",
+            paused = "||", warning = "!", error = "x", clean = "+",
+            help = "?", path = "/",
+          },
+        })
+<
+    Git status markers use |diffreel-status-icons|. File-type icons use
+    nvim-web-devicons when available. Folder symbols use DirectoryIcon;
+    other symbols share their label's highlight group.
+
+    Pane labels distinguish Worktree from Unsaved. The Changes header shows
+    the selected file position and total as 2 / 3. Status descriptions wrap
+    to the explorer width; continuation lines indent by two spaces where
+    space permits. Reflow preserves the cursor's message and text position;
+    removing that message keeps the cursor in the remaining footer.
+
                                                           *diffreel-line_stats*
 line_stats: boolean (default false)
     Show per-file additions/deletions and an explorer total. Counts use saved
@@ -796,7 +837,7 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     All names below are public. Empty inherits the surrounding text style.
     Explorer status families separate base, Name, Icon and Marker. Names link
     to ExplorerFileName; markers link to the corresponding status base. A
-    buffer-only row uses BufferOnly. Directory arrows use DirectoryIcon.
+    buffer-only row uses BufferOnly. Folder symbols use DirectoryIcon.
 
     Icons use devicons unless an explicit definition appears on the status Icon
     or its link chain, including ExplorerFileIcon. An explicit {} suppresses
