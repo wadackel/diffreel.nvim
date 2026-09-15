@@ -54,6 +54,9 @@ Windows is not supported. File icons are optional and use `nvim-web-devicons` wh
 
 ## Install
 
+The examples follow the latest `vX.Y.Z` release. Before the first `v0.1.0`
+release is published, use the [main branch settings](docs/user-guide.md#release-versions-and-main).
+
 ### lazy.nvim
 
 Add this plugin specification to your lazy.nvim configuration:
@@ -61,6 +64,7 @@ Add this plugin specification to your lazy.nvim configuration:
 ```lua
 {
   "wadackel/diffreel.nvim",
+  version = "*",
   name = "diffreel.nvim",
   main = "diffreel",
   cmd = {
@@ -80,7 +84,11 @@ Add this to your Neovim configuration:
 
 ```lua
 vim.pack.add({
-  { src = "https://github.com/wadackel/diffreel.nvim", name = "diffreel.nvim", version = "main" },
+  {
+    src = "https://github.com/wadackel/diffreel.nvim",
+    name = "diffreel.nvim",
+    version = vim.version.range("*"),
+  },
 })
 require("diffreel").setup({})
 vim.keymap.set("n", "<Leader>gD", "<cmd>Diffreel<CR>", { desc = "Toggle diffreel" })
@@ -207,6 +215,7 @@ Supported text retains UTF-8, BOM, line-ending, and final-newline metadata. Syml
 
 ## Learn more
 
+- [Changelog](CHANGELOG.md): versioned release history.
 - [User guide](docs/user-guide.md): workflows, installation options, and troubleshooting.
 - [Neovim help](doc/diffreel.txt): commands, configuration defaults, and integration APIs.
 - [Contributing](CONTRIBUTING.md): report a problem or contribute a change.

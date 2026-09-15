@@ -20,6 +20,24 @@ env:
   GH_NO_UPDATE_NOTIFIER: '1'
 
 jobs:
+  release-pr:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: plugin-release
+      cancel-in-progress: false
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true
+
   check:
     name: check (${{ matrix.runner }})
     strategy:
@@ -190,3 +208,34 @@ jobs:
           path: .wadackel/qa/consumer
           include-hidden-files: true
           if-no-files-found: warn
+
+  plugin-release:
+    needs: [check, native, publish, consumer]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: plugin-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version-file: .deno-version
+      - name: Match the pending release to the tested commit
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: deno run --frozen -A scripts/plugin-release.ts
+      - if: steps.candidate.outputs.publish == 'true'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true

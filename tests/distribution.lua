@@ -23,6 +23,10 @@ vim.fn.writefile({ "UI change" }, root .. "/lua/diffreel/init.lua")
 assert(dist.id(root) == id, "UI-only edits must reuse the daemon")
 vim.fn.writefile({ "test dependency change" }, root .. "/deno.lock")
 assert(dist.id(root) == id, "Test dependencies must not rebuild the daemon")
+for _, path in ipairs({ "version.txt", "CHANGELOG.md", "release-please-config.json", ".release-please-manifest.json" }) do
+  vim.fn.writefile({ "plugin release metadata" }, root .. "/" .. path)
+  assert(dist.id(root) == id, "Plugin versioning must not rebuild the daemon: " .. path)
+end
 for _, path in ipairs({ "scripts/validate-daemon.ts", ".deno-version" }) do
   local previous = dist.read(root .. "/" .. path)
   vim.fn.writefile({ "" }, root .. "/" .. path, "a")

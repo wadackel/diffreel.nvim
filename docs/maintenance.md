@@ -33,6 +33,8 @@ Outside Nix, select the pinned rustup compiler with `cargo +1.97.1 build` instea
 
 ## Release workflow
 
+Plugin versions and daemon binaries have separate release lifecycles. The plugin uses `vX.Y.Z` tags; daemon downloads continue to use immutable `daemon-<build ID>` prereleases.
+
 The [CI workflow](../.github/workflows/ci.yml) validates four native targets:
 
 | Target | Runner | Binary requirement |
@@ -51,6 +53,7 @@ flowchart LR
     check[Static checks: Linux and macOS] --> publish
     identity --> publish
     publish --> consumer[Consumer checks: four targets]
+    consumer --> version[Plugin version publication]
 ```
 
 Native jobs expose separate binary-validation, Rust-test, Lua/Deno-test, and installation-test steps. The Lua/Deno runner uses `--jobs 2`, with exclusive suites described in the [development guide](development.md#suite-coverage). New commits cancel superseded runs of the same PR. Main pushes and manual runs have distinct workflow concurrency groups; the existing per-build-ID publication lock still serializes releases.
@@ -75,6 +78,46 @@ ravelact wiring --root . --no-cache
 For timing comparisons, retain the run URL, source and executable identities, job/step durations, queue time, and cache-hit status. Compare equivalent changes with the same tool versions and test coverage, separating cold-cache and warm-cache runs. Use several runs before interpreting differences, and distinguish local suite timings from GitHub runner timings. Keep raw evidence under `.wadackel/qa/`; do not put historical pass counts or speed claims in the workflow instructions.
 
 The [2026-09-15 CI measurements](measurements/ci-2026-09-15.md) record the initial cache misses and three cache-hit reruns of the same commit, including per-target timings and comparison limits.
+
+### Plugin versions
+
+[release-please-config.json](../release-please-config.json) configures one root package using the `simple` strategy. The action uses manifest mode: do not set its `release-type` input, which bypasses the configuration file. [The version manifest](../.release-please-manifest.json) starts empty so `initial-version: 0.1.0` controls the first release. Existing Conventional Commits contribute to its changelog. `version.txt` must exist for the simple strategy to update it. After bootstrap, release-please updates the manifest, version file and changelog in each release PR. Cargo's package version remains independent.
+
+The workflow pins release-please-action v5.0.0 by commit. During 0.x development, breaking changes increase minor; features and fixes increase patch. Plugin GitHub Releases are ordinary releases, including 0.x, while daemon releases remain prereleases.
+
+#### Setup and release
+
+1. In repository **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. Keep the default workflow permissions read-only; only the release jobs request write access. No additional Secret or PAT is needed.
+2. Merge the versioning configuration into main. The `release-pr` job creates or updates a release PR without publishing a tag. Review its version and changelog; the first should be `0.1.0`.
+3. Dispatch CI for the release PR branch using the commands below. The built-in `GITHUB_TOKEN` does not automatically trigger CI on the bot's PR changes. Verify the completed run's `headSha` equals the PR's current `headRefOid`; dispatch again if the PR changes.
+4. After the static and native checks succeed, squash-merge the release PR, retaining its generated title and release metadata. The resulting main run publishes or reuses the daemon, runs all four consumer jobs, and only then publishes the plugin version at that merge commit.
+5. Confirm the tag points to the release PR's merge SHA and both documented plugin-manager selections install it. Before the first tag exists, use the documented main settings.
+
+```sh
+gh pr view <release-pr-number> --json headRefName,headRefOid
+gh workflow run ci.yml --ref <release-pr-branch>
+gh run list --workflow ci.yml --branch <release-pr-branch> --event workflow_dispatch
+gh run watch <run-id> --exit-status
+gh run view <run-id> --json headSha,conclusion
+```
+
+PR-branch dispatches run checks without publishing daemon or plugin releases. On main, [plugin-release.ts](../scripts/plugin-release.ts) paginates closed PRs to find merged main PRs labeled `autorelease: pending`. Publication requires exactly one candidate matching the tested SHA. No candidate is a no-op; a different SHA is skipped with a recovery message. Multiple candidates or an API error fail the job without publishing. release-please leaves a merged pending release in place until it is published, instead of opening a new release PR.
+
+#### Recovery and validation
+
+For a transient failure, re-run the original merge-commit workflow with `gh run rerun <run-id>`, then watch it to completion. Dispatching main after it has advanced does not validate the older release commit. If the source itself fails validation, fix main and abandon the failed release candidate by removing its `autorelease: pending` label before preparing a replacement release PR; do not publish the failed commit or move an existing tag. A replacement may skip an unreleased version number.
+
+The two release-please jobs share a concurrency group with cancellation of running jobs disabled. GitHub can still replace a pending job when another is queued; re-run the original merge-commit workflow if its publication job was canceled. A published version is never overwritten. If release creation succeeded but a comment or label update failed, a retry may repair the labels and still report a duplicate-release error; inspect the existing tag/Release, then re-run as needed until no pending candidate remains.
+
+Run these focused checks for versioning changes, in addition to the workflow checks above:
+
+```sh
+deno task check
+deno test --frozen -A tests/plugin_release_test.ts tests/release_test.ts
+nvim --headless -u NONE -i NONE -l tests/distribution.lua
+```
+
+When changing release-please or the version policy, exercise the pinned release-please version against fixtures without GitHub writes: initial `0.1.0`, feature/fix `0.1.1`, and breaking change `0.2.0`. Use isolated Git repositories and fresh Neovim sessions to check lazy.nvim and vim.pack select SemVer tags rather than newer main commits or daemon tags, and support a fixed tag and rollback. Keep evidence under `.wadackel/qa/`. Actual anonymous delivery remains the responsibility of the four consumer jobs; local fixtures do not establish public availability.
 
 ## Public availability
 

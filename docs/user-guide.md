@@ -504,9 +504,23 @@ Plugin source and prebuilt daemons are public. Install using the HTTPS URLs in t
 
 The matching daemon is prepared asynchronously on first use. Run `:DiffreelInstall` to prepare it before opening a review. Each attempt has a 120-second timeout. Failure leaves an error that can be retried; it does not trigger a local compilation or select a different build.
 
-Release names use `daemon-<build ID>`. The ID is derived from the installed Rust source and build inputs, so UI-only changes can reuse a binary. Your plugin manager can pin a commit or install a shallow checkout: the installer does not need Git history. Updating Rust inputs on `main` can precede the matching CI release briefly; wait for CI to finish and retry. Restart Neovim after any plugin update or rollback.
+Plugin releases use `vX.Y.Z` tags. Their matching daemon has been published and tested before the plugin tag is created. Daemon releases use `daemon-<build ID>`; this ID is derived from the installed Rust source and build inputs, so UI-only changes and version bumps can reuse a binary. Your plugin manager can pin a tag or commit, or install a shallow checkout: the installer does not need Git history. Restart Neovim after any plugin update or rollback.
 
 The cache is under `stdpath("data")/diffreel/daemon/<build ID>/<target>`. New editor sessions check the executable against its installed verification record; incomplete or corrupt installations are downloaded again when automatic installation is enabled. Old IDs remain available for rollback and are not pruned automatically.
+
+### Release versions and main
+
+The README follows the latest versioned release. During 0.x development, breaking changes increase the minor version, while features and fixes increase the patch version. Read the [changelog](../CHANGELOG.md) before updating; following all releases can cross a breaking version boundary.
+
+| Selection | lazy.nvim fields | vim.pack `version` |
+|---|---|---|
+| Latest release | `version = "*"` | `vim.version.range("*")` |
+| Fixed release | `version = "v0.1.0"` | `"v0.1.0"` |
+| Development branch | `version = false, branch = "main"` | `"main"` |
+
+Use the development branch before the first versioned release is published. On main, Rust input changes can precede the matching daemon release briefly; wait for CI to finish and retry `:DiffreelInstall`.
+
+After changing the selection, update through your plugin manager (`:Lazy update diffreel.nvim` or `:lua vim.pack.update({ "diffreel.nvim" })`) and restart Neovim. To roll back, select a previously published tag and update again. Keep the plugin manager's lockfile to reproduce exact installed commits. Daemon tags are internal download identifiers, not plugin versions.
 
 ### Offline use and custom binaries
 

@@ -40,6 +40,14 @@ The README is the entry point, the user guide explains workflows, and `doc/diffr
 
 Validate links, Lua examples, and help tags. Use a real Neovim capture when changing the introductory image; the [capture procedure](docs/development.md#documentation-and-captures) records its fixture and rendering environment. Prose-only edits do not require a full Rust or platform test run.
 
+## Commit messages and releases
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for commits on main and PR titles used for squash merges. `fix:` describes a bug fix, `feat:` a feature, and `feat!:` or a `BREAKING CHANGE:` footer an incompatible change. Use `docs:`, `test:`, `ci:`, or `chore:` for maintenance; these normally do not trigger a release by themselves.
+
+Releases start at `v0.1.0`. During 0.x development, incompatible changes increase minor and features/fixes increase patch. At 1.x and later, incompatible changes increase major, features increase minor, and fixes increase patch.
+
+release-please maintains the changelog and version files in a release PR. Merge that PR after its manually dispatched CI succeeds; the main run publishes the version only after daemon delivery and consumer tests pass for the merge commit. Follow the [release procedure](docs/maintenance.md#plugin-versions) for initial setup, CI dispatch, and recovery.
+
 ## License
 
 diffreel's code and documentation are available under the [MIT license](LICENSE).
