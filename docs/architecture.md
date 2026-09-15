@@ -256,7 +256,7 @@ requests new Git content or changes the daemon protocol.
 
 Explorer rows cache byte ranges and group names, not resolved colors. A successful highlight application changes the generation and rerenders live explorers; hidden panels pick up the generation on reveal. File icon routing follows explicit definitions through the registered link chain, otherwise retaining provider colors. Direct icon changes require setup to invalidate existing provider extmarks. Popup buffers use dedicated groups and local window mappings. Native diff uses the existing presentation ownership and cleanup path; new chrome remaps preserve preexisting user aliases.
 
-Default diff backgrounds blend theme colors with `Normal`; panel and header surfaces derive from its foreground/background when both are present. Transparent themes retain the native chrome links. The selected-row marker overlays a reserved leading space, leaving file labels and cached byte ranges intact. Quiet filler characters use the presentation lease and preserve the raw `fillchars` value, including literal commas that `vim.opt` cannot round-trip.
+Default diff backgrounds blend theme colors with `Normal`; panel and header surfaces derive from its foreground/background when both are present. Transparent themes retain the native chrome links. The selected-row marker overlays a reserved leading space, leaving file labels and cached byte ranges intact. Blank end-of-buffer characters use the presentation lease and preserve the raw `fillchars` value, including literal commas that `vim.opt` cannot round-trip. Native diff filler characters retain the user's setting and use `DiffreelFiller` for subdued alignment rows.
 
 ## Explorer hierarchy and cursor
 

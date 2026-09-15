@@ -29,6 +29,24 @@ local plugin, view
 local ok, err = xpcall(function()
   local presentation = require("diffreel.presentation")
   local window, global_fills = vim.api.nvim_get_current_win(), vim.go.fillchars
+  for _, diff in ipairs({ "╱", "-", " ", "" }) do
+    for _, scope in ipairs({ "global", "local" }) do
+      local value = "vert:|,eob:~" .. (diff == "" and "" or ",diff:" .. diff)
+      vim.go.fillchars = scope == "global" and value or "diff:╱"
+      local original = scope == "local" and value or ""
+      vim.api.nvim_set_option_value("fillchars", original, { win = window, scope = "local" })
+      local expected = vim.opt_local.fillchars:get().diff
+      local styled = {}
+      presentation.chrome(styled, window, "Diff")
+      assert(vim.opt_local.fillchars:get().diff == expected, "Review replaced the " .. scope .. " diff filler")
+      assert(vim.opt_local.fillchars:get().eob == " ", "Review end-of-buffer rows are not blank")
+      presentation.restore(styled, window)
+      assert(
+        vim.api.nvim_get_option_value("fillchars", { win = window, scope = "local" }) == original,
+        "Restoring diff fill characters lost the original local value"
+      )
+    end
+  end
   vim.go.fillchars = "vert:|"
   vim.api.nvim_set_option_value("fillchars", "", { win = window, scope = "local" })
   local snapshot = presentation.capture_window(window)
@@ -43,11 +61,13 @@ local ok, err = xpcall(function()
   assert(vim.api.nvim_get_option_value("fillchars", { win = window }) == "vert:!")
   presentation.restore_window(window, snapshot)
   assert(vim.api.nvim_get_option_value("fillchars", { win = window }) == "vert:!")
-  presentation.chrome(styled, window, "Explorer")
-  vim.wo[window].fillchars = "eob:#"
-  presentation.chrome(styled, window, "Explorer")
-  presentation.restore(styled, window)
-  assert(vim.wo[window].fillchars == "eob:#", "Cleanup replaced a later fillchars edit")
+  for _, scope in ipairs({ "Explorer", "Diff" }) do
+    presentation.chrome(styled, window, scope)
+    vim.wo[window].fillchars = "eob:#,diff:-"
+    presentation.chrome(styled, window, scope)
+    presentation.restore(styled, window)
+    assert(vim.wo[window].fillchars == "eob:#,diff:-", "Cleanup replaced a later fillchars edit")
+  end
   vim.api.nvim_set_option_value("fillchars", "", { win = window, scope = "local" })
   vim.go.fillchars = global_fills
   git({ "init", "-q" })
@@ -64,7 +84,7 @@ local ok, err = xpcall(function()
   local normal, real = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
   vim.wo[normal].winhighlight = "Normal:Normal"
   vim.wo[normal].number = false
-  vim.opt_local.fillchars = { eob = "~", diff = "-", fold = "·", vert = "," }
+  vim.opt_local.fillchars = { eob = "~", diff = "╱", fold = "·", vert = "," }
   local original_fillchars = vim.wo[normal].fillchars
   local other = vim.api.nvim_create_buf(true, false)
   local target_window = vim.api.nvim_open_win(other, true, { split = "right", win = normal })
@@ -88,7 +108,7 @@ local ok, err = xpcall(function()
   local fills = vim.api.nvim_win_call(view.right_win, function()
     return vim.opt_local.fillchars:get()
   end)
-  assert(fills.eob == " " and fills.diff == " ", "Review filler and end-of-buffer rows are not quiet")
+  assert(fills.eob == " " and fills.diff == "╱", "Review replaced the configured diff filler")
   assert(
     fills.fold == "·" and vim.wo[view.right_win].fillchars:find("vert:,", 1, true),
     "Review changed unrelated fill characters"

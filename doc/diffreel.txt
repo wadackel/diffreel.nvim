@@ -890,8 +890,16 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     These defaults derive independently of callback edits to other groups.
     Specify both line and text groups to customize both shades.
 
-    Review windows use blank end-of-buffer and diff filler characters. The
-    original fillchars value is restored while still owned by diffreel.
+    Side-by-side and stacked layouts preserve the diff character in
+    'fillchars' and use DiffreelFiller for the alignment rows opposite added
+    or deleted lines. To display diagonal lines, configure before opening:
+>lua
+    vim.opt.fillchars:append({ diff = "╱" })
+<
+    An explicit space keeps filler rows blank; an unspecified diff character
+    uses Neovim's default. Review windows use blank end-of-buffer characters.
+    Other fill characters remain intact. The original local fillchars value
+    is restored while still owned by diffreel.
 
 ==============================================================================
 5. LUA API                                                    *diffreel-api*
