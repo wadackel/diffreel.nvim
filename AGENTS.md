@@ -24,7 +24,7 @@ The GitHub repository is `wadackel/diffreel.nvim`, the plugin name is `diffreel.
 | Window styling, folds, option restoration | [lua/diffreel/presentation.lua](lua/diffreel/presentation.lua) |
 | Explorer rows and display paths | [lua/diffreel/explorer.lua](lua/diffreel/explorer.lua) |
 | Rust transport and daemon | [lua/diffreel/backend/rust.lua](lua/diffreel/backend/rust.lua), [daemon/src](daemon/src) |
-| Daemon installation and distribution | [install.lua](lua/diffreel/install.lua), [distribution.lua](lua/diffreel/distribution.lua), [scripts](scripts), [.github/workflows/ci.yml](.github/workflows/ci.yml) |
+| Daemon installation and distribution | [install.lua](lua/diffreel/install.lua), [distribution.lua](lua/diffreel/distribution.lua), [scripts](scripts), [.github/workflows/ci.yaml](.github/workflows/ci.yaml) |
 | Content semantics and Git parsing | [content.lua](lua/diffreel/content.lua), [model.rs](daemon/src/model.rs) |
 | UI observation and measurement | [tests/support.ts](tests/support.ts), [benchmarks](benchmarks) |
 
@@ -45,6 +45,7 @@ The GitHub repository is `wadackel/diffreel.nvim`, the plugin name is `diffreel.
 - Select checks from the development guide. Shared semantics require Rust and Neovim integration tests; Rust unit checks do not cover the Lua UI.
 - Comments explain rejected alternatives or implementation traps. Do not narrate what code does, add `Why:` labels, or preserve conversation history in comments.
 - Follow root StyLua settings and Rust formatting. Keep shared protocol/content changes consistent across the Rust daemon, Lua UI, installer and their tests.
+- Use the `.yaml` extension for YAML files.
 - Update the relevant documentation when behavior, boundaries, or commands change. Keep transient Git state and historical pass counts out of permanent instructions.
 - Store local logs, fixtures, and captures under ignored `.wadackel/qa/`; record the command, backend, configuration, executable, outcome, and verification limits.
 - Keep measurement evidence with its source and executable identities; do not present local smoke runs as performance claims.

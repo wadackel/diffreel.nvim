@@ -35,7 +35,7 @@ Outside Nix, select the pinned rustup compiler with `cargo +1.97.1 build` instea
 
 Plugin versions and daemon binaries have separate release lifecycles. The plugin uses `vX.Y.Z` tags; daemon downloads continue to use immutable `daemon-<build ID>` prereleases.
 
-The [CI workflow](../.github/workflows/ci.yml) validates four native targets:
+The [CI workflow](../.github/workflows/ci.yaml) validates four native targets:
 
 | Target | Runner | Binary requirement |
 |---|---|---|
@@ -67,8 +67,8 @@ Post-publication [consumer tests](../tests/consumer.ts) install through lazy.nvi
 For workflow changes, run the available static checks:
 
 ```sh
-actionlint .github/workflows/ci.yml
-zizmor --offline .github/workflows/ci.yml
+actionlint .github/workflows/ci.yaml
+zizmor --offline .github/workflows/ci.yaml
 ravelact build --root . --no-cache
 ravelact permissions --root . --no-cache
 ravelact secrets --root . --no-cache
@@ -95,8 +95,8 @@ The workflow pins release-please-action v5.0.0 by commit. During 0.x development
 
 ```sh
 gh pr view <release-pr-number> --json headRefName,headRefOid
-gh workflow run ci.yml --ref <release-pr-branch>
-gh run list --workflow ci.yml --branch <release-pr-branch> --event workflow_dispatch
+gh workflow run ci.yaml --ref <release-pr-branch>
+gh run list --workflow ci.yaml --branch <release-pr-branch> --event workflow_dispatch
 gh run watch <run-id> --exit-status
 gh run view <run-id> --json headSha,conclusion
 ```
