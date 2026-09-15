@@ -14,13 +14,17 @@ Search existing [issues](https://github.com/wadackel/diffreel.nvim/issues) first
 
 For a draft or refresh issue, describe which edits were unsaved, which were written by another process, the comparison revisions, and whether the review was visible. For an installation issue, distinguish failure to clone the plugin from failure to download the daemon.
 
-Remove tokens, private repository content, and identifying paths before sharing logs or captures. Report what you observed without discarding an unsaved buffer just to simplify the reproduction. The [troubleshooting guide](docs/user-guide.md#troubleshooting) covers common recovery steps.
+> [!CAUTION]
+> Remove tokens, private repository content, and identifying paths before sharing logs or captures.
+
+Report what you observed without discarding an unsaved buffer just to simplify the reproduction. The [troubleshooting guide](docs/user-guide.md#troubleshooting) covers common recovery steps.
 
 ## Propose a feature
 
 Describe the workflow you want to improve, an example of the desired interaction, and any existing workaround. diffreel focuses on reviewing changing worktrees with native Neovim editing. Staging, discard, merge resolution, and history browsing are outside its current feature set.
 
-For changes that introduce a new workflow or alter public behavior, discuss the proposal in an issue before investing in a large implementation. Small fixes and documentation corrections can be proposed directly in a pull request.
+> [!TIP]
+> For changes that introduce a new workflow or alter public behavior, discuss the proposal in an issue before investing in a large implementation. Small fixes and documentation corrections can be proposed directly in a pull request.
 
 ## Develop a change
 
