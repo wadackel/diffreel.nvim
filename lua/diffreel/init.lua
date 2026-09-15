@@ -11,6 +11,7 @@ local help = require("diffreel.help")
 local line_stats = require("diffreel.line_stats")
 local panel = require("diffreel.panel")
 local popup = require("diffreel.popup")
+local full_name = require("diffreel.full_name")
 local hunks = require("diffreel.hunks")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
@@ -325,21 +326,7 @@ local function render(view, cursor_path)
       })
     end
     for i, row in ipairs(rows) do
-      for _, span in ipairs(row.highlights) do
-        vim.api.nvim_buf_set_extmark(view.explorer_buf, namespace, i + 2, span.first, {
-          end_col = span.last,
-          hl_group = span.icon and highlights.icon(span.group, row.icon_group) or span.group,
-        })
-      end
-      if row.entry and row.path == view.selected_path then
-        vim.api.nvim_buf_set_extmark(view.explorer_buf, namespace, i + 2, 0, {
-          line_hl_group = "DiffreelExplorerSelected",
-          virt_text = { { vim.fn.strdisplaywidth("▎") == 1 and "▎" or ">", "DiffreelExplorerSelectedMarker" } },
-          virt_text_pos = "overlay",
-          hl_mode = "combine",
-          priority = 20,
-        })
-      end
+      explorer.highlight(view.explorer_buf, namespace, i + 2, row, view.selected_path)
     end
     view.explorer_render = {
       generation = highlights.generation,
@@ -377,6 +364,7 @@ local function render(view, cursor_path)
     end
   end
   view.reveal_path = nil
+  full_name.update(view)
 end
 
 local function actions(scope)
@@ -1449,6 +1437,7 @@ local function apply_explorer(view, next_options, settings, automatic)
   end
   local width = panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win)
   local height = panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win)
+  full_name.close(view)
   if not automatic then
     popup.close(view, "path_popup")
     help.close(view)
@@ -2049,6 +2038,9 @@ local function dispose(view)
     end
   end
   cleanup(function()
+    full_name.dispose(view)
+  end)
+  cleanup(function()
     help.close(view)
   end)
   cleanup(function()
@@ -2309,6 +2301,50 @@ function M.setup(opts)
     end
   end
   recolor()
+  vim.api.nvim_create_autocmd({ "CursorMoved", "WinEnter", "BufWinEnter", "WinScrolled", "WinResized" }, {
+    group = group,
+    callback = function(event)
+      if full_name.owns(tonumber(event.match)) then
+        return
+      end
+      for _, view in pairs(M.views) do
+        full_name.update(view)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave", "TabLeave" }, {
+    group = group,
+    callback = function()
+      local win = vim.api.nvim_get_current_win()
+      for _, view in pairs(M.views) do
+        if view.explorer_win == win then
+          full_name.close(view)
+        end
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("OptionSet", {
+    group = group,
+    pattern = {
+      "wrap",
+      "cursorline",
+      "number",
+      "relativenumber",
+      "numberwidth",
+      "foldcolumn",
+      "signcolumn",
+      "statuscolumn",
+      "winbar",
+    },
+    callback = function()
+      if full_name.owns(vim.api.nvim_get_current_win()) then
+        return
+      end
+      for _, view in pairs(M.views) do
+        full_name.update(view)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("ColorSchemePre", { group = group, callback = highlights.before_colorscheme })
   vim.api.nvim_create_autocmd("ColorScheme", {
     group = group,
@@ -2457,6 +2493,9 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "TabEnter", "TabClosed", "WinClosed", "BufWinEnter" }, {
     group = group,
     callback = function(event)
+      if event.event == "WinClosed" and full_name.owns(tonumber(event.match)) then
+        return
+      end
       vim.schedule(function()
         if event.event == "TabEnter" then
           presentation.clean_copies()

@@ -225,6 +225,20 @@ If you disable default keymaps, bind `next_change` / `prev_change` to navigate w
 
 Press `i` in the explorer to switch between a tree and a sorted flat file list. The list shows full relative paths and ignores folding operations, while preserving folds for a return to tree mode. `I` toggles compaction of single-child directory chains. A compact row represents its deepest directory; parent navigation uses visible rows, and path/name operations refer to that deepest directory. Compaction stops at existing folds and paths that are themselves compared files.
 
+When the cursor reaches a clipped row, a borderless, single-line overlay shows
+its unshortened name immediately. It retains indentation, icons, colors, status
+and optional line counts. Tree mode expands the name, compact mode the joined
+directory names, and list mode the relative path. Focus stays in the explorer,
+so you can keep moving between rows without dismissing it.
+
+The overlay extends over the adjacent diff pane without resizing it. It stays
+aligned with the original row even at the screen's right edge; text beyond
+that edge remains clipped. It does not wrap or shift left. Moving to an
+unclipped row or leaving the explorer closes it. Horizontal scrolling or
+enabling `wrap` suppresses it. Use `K` for the complete absolute path, or set
+`explorer.full_name = false` to disable automatic expansion. This boolean works
+in `setup()`, `open()`, and `set_explorer()`.
+
 Press `<Leader>b` in a review pane to hide or show the explorer. `<Leader>e` from a diff pane also shows a hidden explorer before focusing it. Configure defaults or update an existing view:
 
 ```lua

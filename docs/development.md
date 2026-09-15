@@ -117,6 +117,7 @@ Use `just build` and the applicable rows below inside `nix develop`. All Lua fil
 | Commands, selection, tab/window lifecycle | `ui.lua`, `ui_edges.lua`, `ui_races.lua`, `exploration.lua`, `autocmd_lifecycle.lua`; stability `toggle`, `tree-navigation`, `rapid-selection`, `rapid-open-close`, `move-right-tab`, `move-clone-tab` |
 | Comparison scopes, index, merge-base, preferred initial file | `options.lua`, `comparison_options.lua`, `initial_selection.lua`; Rust repository regressions, `repository.lua`, `watcher.lua`, `ui_restart.lua` |
 | Explorer list/compaction/placement, sizing and single-file mode | `explorer_layout.lua`, `layout_options.lua`, `panel_ui.lua`, `explorer_resize.ts`, `path_popup.lua`, `file_mode.lua`, `navigation_edges.lua`; Rust pinned-file tests |
+| Clipped explorer names and cursor-row overlays | `full_name_rows.lua`, `full_name_ui.ts`, `highlight_rows.lua`, `tree_display_cache.lua`, `path_popup.lua`, `cleanup_errors.lua` |
 | Hunk navigation, mode leases and lifecycle hooks | `hunks.lua`, `hunks_ui.lua`, `keymap_modes.lua`, `events.lua`, `events_edges.lua`, `navigation_edges.lua`; existing keymap/cleanup/race suites |
 | GitHub PR jobs, cache and refresh | `pr_options.lua`, `pr_backend.ts`, `pr_ui.ts`, `pr_lifecycle.ts`; Rust PR tests and existing race/cleanup suites; optional `pr_live.ts` historical fixtures |
 | Command completion and keymap help | `completion.lua`, `keymap_help.lua`, `keymaps.lua`, `keymap_lease.lua`, `keymaps_ui.lua`; help-tag validation |

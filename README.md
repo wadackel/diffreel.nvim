@@ -155,6 +155,11 @@ File navigation accepts counts and stops at either end without wrapping. Tree co
 
 ## Size the explorer
 
+Clipped names expand automatically over the cursor row, keeping explorer focus
+and the diff layout in place. The one-line overlay keeps icons and colors and
+stops at the screen's right edge. Set `explorer.full_name = false` to disable it;
+`K` still opens the complete absolute path.
+
 Set `explorer.width` and `explorer.height` to a number, or calculate them from the editor size:
 
 ```lua

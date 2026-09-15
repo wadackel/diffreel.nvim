@@ -298,6 +298,15 @@ to tree mode. I compacts single-child directory chains; a grouped row targets
 its deepest directory for selection, path/name operations, and visible-parent
 navigation. Existing folds and compared file nodes stop compaction.
 
+Clipped cursor rows expand immediately in a borderless, one-line overlay.
+Indentation, icons, name colors, status and optional line counts are retained.
+Tree mode shows the name, compact mode the joined directory names, and list
+mode the relative path. Focus stays in the explorer. The overlay keeps the
+original row position, clips at the screen's right edge, and never wraps or
+shifts left. It closes on an unclipped row or when leaving the explorer.
+Horizontal scrolling and 'wrap' suppress it. Disable automatic expansion with
+explorer.full_name = false; K remains available for the complete absolute path.
+
 <Leader>b hides/shows the explorer. <Leader>e from a diff pane shows a hidden
 explorer before focusing it. Use |diffreel-explorer| defaults or
 |diffreel.set_explorer()| for left/right/top/bottom placement. Layout changes
@@ -524,6 +533,7 @@ layout: string (default "side_by_side")
 explorer: table (setup() defaults and per-open overrides)
     mode:     "tree" (default) or "list"
     compact:  boolean (default false)
+    full_name: boolean (default true); automatically expand clipped cursor rows
     visible:  boolean (default true; false for a file view unless explicit)
     position: "left" (default), "right", "top" or "bottom"
     width:    positive integer or function; falls back to width or automatic
@@ -549,7 +559,7 @@ explorer: table (setup() defaults and per-open overrides)
     Setup validates numbers and stores functions without calling them. Only
     the active dimension is evaluated: at first display, on a position change,
     on explicit updates to that dimension, and after editor resizing. Changing
-    mode, compact, or only the inactive dimension does not call the function.
+    mode, compact, full_name, or only the inactive dimension does not call it.
 
     Functions and the default automatic width follow |VimResized|. Inactive
     tabs defer adjustment until entered; hidden panels defer it until shown.

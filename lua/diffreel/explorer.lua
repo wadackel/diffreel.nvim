@@ -265,44 +265,51 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
         or value.reason and "— "
         or ("+" .. value.additions .. " -" .. value.deletions .. " ")
     end
-    local name = M.display(list and child.path or child.name)
+    local full_name = M.display(list and child.path or child.name)
+    local name = full_name
     if width then
       name = shorten(name, math.max(1, width - vim.fn.strdisplaywidth(lead .. counts) - marker_width - 3))
     end
-    local text = lead .. name
-    local ranges, group = {}, highlights.status(child.entry)
-    span(ranges, 0, #prefix, "DiffreelExplorerIndent")
-    if icon then
-      span(
-        ranges,
-        icon_col,
-        icon_col + #icon,
-        branch and "DiffreelExplorerDirectoryIcon" or (group .. "Icon"),
-        not branch
-      )
+    local function format(label)
+      local text = lead .. label
+      local ranges, group = {}, highlights.status(child.entry)
+      span(ranges, 0, #prefix, "DiffreelExplorerIndent")
+      if icon then
+        span(
+          ranges,
+          icon_col,
+          icon_col + #icon,
+          branch and "DiffreelExplorerDirectoryIcon" or (group .. "Icon"),
+          not branch
+        )
+      end
+      span(ranges, #lead, #text, group .. "Name")
+      text = text
+        .. string.rep(" ", math.max(2, (width or 0) - vim.fn.strdisplaywidth(text .. counts) - marker_width - 1))
+        .. counts
+      local count_col = #text - #counts
+      local add, delete = counts:match("^(%+%d+) (%-%d+)")
+      if add then
+        span(ranges, count_col, count_col + #add, "DiffreelExplorerStatsAdd")
+        span(ranges, count_col + #add + 1, count_col + #add + 1 + #delete, "DiffreelExplorerStatsDelete")
+      elseif counts ~= "" then
+        span(
+          ranges,
+          count_col,
+          #text - 1,
+          counts == "… " and "DiffreelExplorerStatsPending" or "DiffreelExplorerStatsUnavailable"
+        )
+      end
+      span(ranges, #text, #text + #marker, group .. "Marker")
+      return { text = text .. marker, highlights = ranges, marker_col = #text }
     end
-    span(ranges, #lead, #text, group .. "Name")
-    text = text
-      .. string.rep(" ", math.max(2, (width or 0) - vim.fn.strdisplaywidth(text .. counts) - marker_width - 1))
-      .. counts
-    local count_col = #text - #counts
-    local add, delete = counts:match("^(%+%d+) (%-%d+)")
-    if add then
-      span(ranges, count_col, count_col + #add, "DiffreelExplorerStatsAdd")
-      span(ranges, count_col + #add + 1, count_col + #add + 1 + #delete, "DiffreelExplorerStatsDelete")
-    elseif counts ~= "" then
-      span(
-        ranges,
-        count_col,
-        #text - 1,
-        counts == "… " and "DiffreelExplorerStatsPending" or "DiffreelExplorerStatsUnavailable"
-      )
-    end
-    span(ranges, #text, #text + #marker, group .. "Marker")
+    local row = format(name)
     rows[#rows + 1] = {
-      text = text .. marker,
-      highlights = ranges,
-      marker_col = #text,
+      text = row.text,
+      highlights = row.highlights,
+      marker_col = row.marker_col,
+      full = name == full_name and row or format(full_name),
+      truncated = name ~= full_name,
       icon_col = icon_col,
       name_col = #lead,
       icon_group = icon_group,
@@ -329,7 +336,8 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
         end
         local prefix = " " .. string.rep("  ", depth)
         local lead = prefix .. (collapsed[child.path] and "▸ " or "▾ ")
-        local name = M.display(label)
+        local full_name = M.display(label)
+        local name = full_name
         if width then
           name = shorten(name, math.max(1, width - vim.fn.strdisplaywidth(lead)))
         end
@@ -337,9 +345,13 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
         span(ranges, 0, #prefix, "DiffreelExplorerIndent")
         span(ranges, #prefix, #lead - 1, "DiffreelExplorerDirectoryIcon")
         span(ranges, #lead, #lead + #name, "DiffreelExplorerDirectoryName")
+        local full_ranges = vim.deepcopy(ranges)
+        full_ranges[#full_ranges].last = #lead + #full_name
         rows[#rows + 1] = {
           text = lead .. name,
           highlights = ranges,
+          full = { text = lead .. full_name, highlights = full_ranges },
+          truncated = name ~= full_name,
           path = child.path,
           name = child.name,
           paths = paths,
@@ -372,6 +384,24 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     rows = rows,
   }
   return rows, tree
+end
+
+function M.highlight(buf, namespace, line, row, selected, full)
+  for _, range in ipairs((full and row.full or row).highlights) do
+    vim.api.nvim_buf_set_extmark(buf, namespace, line, range.first, {
+      end_col = range.last,
+      hl_group = range.icon and highlights.icon(range.group, row.icon_group) or range.group,
+    })
+  end
+  if row.entry and row.path == selected then
+    vim.api.nvim_buf_set_extmark(buf, namespace, line, 0, {
+      line_hl_group = "DiffreelExplorerSelected",
+      virt_text = { { vim.fn.strdisplaywidth("▎") == 1 and "▎" or ">", "DiffreelExplorerSelectedMarker" } },
+      virt_text_pos = "overlay",
+      hl_mode = "combine",
+      priority = 20,
+    })
+  end
 end
 
 return M

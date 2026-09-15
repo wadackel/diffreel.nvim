@@ -47,19 +47,22 @@ function M.explorer(value, base)
   assert(type(value) == "table", "diffreel: explorer must be a table")
   local result = vim.tbl_extend(
     "force",
-    { mode = "tree", compact = false, visible = true, position = "left", height = 10 },
+    { mode = "tree", compact = false, full_name = true, visible = true, position = "left", height = 10 },
     base or {},
     value
   )
   for name in pairs(result) do
     assert(
-      vim.tbl_contains({ "mode", "compact", "visible", "position", "height", "width", "status_icons" }, name),
+      vim.tbl_contains(
+        { "mode", "compact", "full_name", "visible", "position", "height", "width", "status_icons" },
+        name
+      ),
       "diffreel: unknown explorer option " .. tostring(name)
     )
   end
   assert(result.mode == "tree" or result.mode == "list", "diffreel: explorer.mode must be tree or list")
   assert(vim.tbl_contains({ "left", "right", "top", "bottom" }, result.position), "diffreel: invalid explorer.position")
-  for _, name in ipairs({ "compact", "visible" }) do
+  for _, name in ipairs({ "compact", "full_name", "visible" }) do
     assert(type(result[name]) == "boolean", "diffreel: explorer." .. name .. " must be boolean")
   end
   for _, name in ipairs({ "width", "height" }) do

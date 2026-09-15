@@ -86,7 +86,9 @@ async function main() {
       "assert(math.abs(vim.api.nvim_win_get_width(v.left_win) - vim.api.nvim_win_get_width(v.right_win)) <= 1, 'Editor resize unbalanced the diff panes')",
     );
     assert(!(await nvim.lua<string>("return v.rows[1].text")).includes(path));
-    assert(nvim.text().includes("…"));
+    assert((await nvim.lua<string>("return v.rows[1].text")).includes("…"));
+    await nvim.wait("return v.full_name and v.full_name.win ~= nil");
+    assert(nvim.text().includes(path));
     assert(nvim.text().includes("before") && nvim.text().includes("draft"));
     nvim.capture(out, "narrow");
     await resize(160, 48);
