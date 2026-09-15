@@ -145,6 +145,21 @@ Index panes are read-only. The invoking file is selected when it belongs to the 
 
 File navigation accepts counts and stops at either end without wrapping. Tree controls use the same keys as eda.nvim and preserve the current diff and unsaved buffer. Path copies use Neovim's system clipboard provider. The [user guide](docs/user-guide.md) explains all keys, comparison states, and definition navigation. Run `:help diffreel` for the command, configuration, and Lua API reference.
 
+## Size the explorer
+
+Set `explorer.width` and `explorer.height` to a number, or calculate them from the editor size:
+
+```lua
+require("diffreel").setup({
+  explorer = {
+    width = function(ctx) return math.max(22, math.floor(ctx.columns * 0.25)) end,
+    height = function(ctx) return math.max(1, math.floor(ctx.lines * 0.25)) end,
+  },
+})
+```
+
+Width applies to left/right panels; height applies to top/bottom panels. Functions and the default automatic width follow editor resizing. Manual adjustments to these sizes last until the next editor resize. See [explorer sizing](docs/user-guide.md#explorer-layout) for evaluation timing and fixed sizes.
+
 ## Customize keys
 
 Use `keymaps.explorer` and `keymaps.diff` to change Normal-mode bindings. `keymaps.diff_visual` and `keymaps.diff_operator` configure `ih` in Visual and operator-pending modes. `false` removes a diffreel binding; additional keys can name the same operation:

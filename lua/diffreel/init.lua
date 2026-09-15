@@ -1269,6 +1269,12 @@ function M.open(opts)
     pinned_path = pinned_path or options.preferred_path(root, nil, requested_file)
     assert(pinned_path and pinned_path ~= "", "diffreel: file must be inside the repository")
   end
+  local default_explorer_width = M.config.width
+  local initial_sizing = panel.prepare(
+    { explorer_options = opts.explorer, default_explorer_width = default_explorer_width },
+    opts.explorer,
+    opts.explorer
+  )
   M.sequence = M.sequence + 1
   local id = "view-" .. M.sequence
   local return_tab = vim.api.nvim_get_current_tabpage()
@@ -1329,7 +1335,7 @@ function M.open(opts)
     return_tab = return_tab,
     return_options = return_options,
     explorer_options = opts.explorer,
-    default_explorer_width = M.config.width or math.min(35, math.max(22, math.floor(vim.o.columns * 0.2))),
+    default_explorer_width = default_explorer_width,
     left_win = left,
     right_win = right,
     explorer_buf = panel_buf,
@@ -1363,7 +1369,7 @@ function M.open(opts)
     and view.spec.left == "HEAD"
     and (view.spec.right == "worktree" or view.spec.right == ":0")
   M.views[id] = view
-  local laid_out, layout_error = pcall(panel.apply, view, opts.explorer, opts.explorer)
+  local laid_out, layout_error = pcall(panel.apply, view, opts.explorer, opts.explorer, initial_sizing)
   if not laid_out then
     M.close(view)
     error(layout_error, 0)
@@ -1379,6 +1385,7 @@ function M.open(opts)
     left,
     math.max(1, math.floor((vim.api.nvim_win_get_width(left) + vim.api.nvim_win_get_width(right)) / 2))
   )
+  layout.capture_ratio(view)
   vim.api.nvim_set_current_win(view.explorer_win or view.right_win)
   local bindings = actions("explorer")
   view.keymap_callbacks[panel_buf] = {}
@@ -1429,23 +1436,24 @@ function M.open(opts)
   return view
 end
 
-function M.set_explorer(view, settings)
-  view = view or current_tab_view()
-  if not view or not valid(view) then
+local function apply_explorer(view, next_options, settings, automatic)
+  local previous = view.explorer_options
+  view.explorer_update_seq = (view.explorer_update_seq or 0) + 1
+  local sequence = view.explorer_update_seq
+  local sizing = panel.prepare(view, next_options, settings, automatic)
+  if not valid(view) or view.explorer_options ~= previous or view.explorer_update_seq ~= sequence then
     return
   end
-  local next_options = options.explorer(settings, view.explorer_options)
-  local resized = panel.visible(view)
-    and (
-      (settings.width and settings.width ~= vim.api.nvim_win_get_width(view.explorer_win))
-      or (settings.height and settings.height ~= vim.api.nvim_win_get_height(view.explorer_win))
-    )
-  if vim.deep_equal(next_options, view.explorer_options) and not resized then
+  if automatic and not sizing then
     return
   end
-  popup.close(view, "path_popup")
-  help.close(view)
-  panel.apply(view, next_options, settings)
+  local width = panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win)
+  local height = panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win)
+  if not automatic then
+    popup.close(view, "path_popup")
+    help.close(view)
+  end
+  panel.apply(view, next_options, settings, sizing)
   if not valid(view) then
     return
   end
@@ -1453,10 +1461,68 @@ function M.set_explorer(view, settings)
     view.entries = explorer.ordered(view.tree, next_options.mode)
   end
   render(view)
-  if view.layout == "inline" then
+  if view.layout == "inline" and not view.inline_pending then
     rebuild_inline(view)
   end
-  emit(view, "LayoutChanged", { explorer = vim.deepcopy(view.explorer_options), layout = view.layout })
+  local changed = not vim.deep_equal(previous, view.explorer_options)
+    or width ~= (panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win))
+    or height ~= (panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win))
+  if changed and not automatic then
+    emit(view, "LayoutChanged", { explorer = vim.deepcopy(view.explorer_options), layout = view.layout })
+  end
+end
+
+function M.set_explorer(view, settings)
+  view = view or current_tab_view()
+  if not view or not valid(view) then
+    return
+  end
+  local next_options = options.explorer(settings, view.explorer_options)
+  if vim.deep_equal(next_options, view.explorer_options) and not settings.width and not settings.height then
+    return
+  end
+  apply_explorer(view, next_options, settings)
+end
+
+local function resize_explorer(view)
+  if
+    not valid(view)
+    or not panel.visible(view)
+    or vim.api.nvim_get_current_tabpage() ~= view.tab
+    or view.layout_changing
+  then
+    return
+  end
+  local axis = panel.axis(view.explorer_options)
+  local pending, generation = panel.pending(view)
+  if not pending or (view.explorer_size_errors or {})[axis] == generation then
+    return
+  end
+  local sequence = (view.explorer_update_seq or 0) + 1
+  local ok, err = pcall(apply_explorer, view, view.explorer_options, {}, true)
+  if not ok and valid(view) and view.explorer_update_seq == sequence then
+    view.explorer_size_errors = view.explorer_size_errors or {}
+    local reported = view.explorer_size_errors[axis]
+    view.explorer_size_errors[axis] = generation
+    if not reported then
+      vim.notify("diffreel: explorer." .. axis .. " resize failed: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end
+end
+
+local function resize_view(view)
+  resize_explorer(view)
+  if
+    valid(view)
+    and view.layout_resize_pending
+    and not view.layout_changing
+    and vim.api.nvim_get_current_tabpage() == view.tab
+  then
+    local ok, err = pcall(layout.resize, view)
+    if not ok then
+      vim.notify("diffreel: diff pane resize failed: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end
 end
 
 local function layout_event(view, previous)
@@ -2311,6 +2377,9 @@ function M.setup(opts)
       for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
         if view.tab == tab then
           if event.event == "TabLeave" then
+            if valid(view) then
+              layout.capture_ratio(view)
+            end
             leave(view)
           else
             enter(view)
@@ -2319,11 +2388,32 @@ function M.setup(opts)
       end
     end,
   })
+  local resize_scheduled = false
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = group,
+    callback = function()
+      panel.resized()
+      for _, view in pairs(M.views) do
+        view.layout_resize_pending = true
+      end
+      if resize_scheduled then
+        return
+      end
+      resize_scheduled = true
+      vim.schedule(function()
+        resize_scheduled = false
+        for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
+          resize_view(view)
+        end
+      end)
+    end,
+  })
   vim.api.nvim_create_autocmd("WinResized", {
     group = group,
     callback = function()
       for _, view in pairs(M.views) do
         if valid(view) then
+          layout.capture_ratio(view)
           render(view)
           if view.layout == "inline" and not view.inline_pending then
             rebuild_inline(view)
@@ -2372,6 +2462,9 @@ function M.setup(opts)
           presentation.clean_copies()
         end
         for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
+          if event.event == "TabEnter" then
+            resize_view(view)
+          end
           if not valid(view) then
             dispose(view)
           elseif

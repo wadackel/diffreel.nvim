@@ -48,7 +48,7 @@ export function commandsFor(
   for (
     const name of ["daemon_shutdown", "pr_backend", "pr_ui", "pr_lifecycle"]
   ) append(denoArgs(`tests/${name}.ts`));
-  for (const name of ["highlights_ui", "inline_ui", "e2e"]) {
+  for (const name of ["highlights_ui", "inline_ui", "explorer_resize", "e2e"]) {
     append(
       denoArgs(
         `tests/${name}.ts`,

@@ -1,6 +1,8 @@
 local M = {}
 local presentation = require("diffreel.presentation")
+local layout = require("diffreel.layout")
 local directions = { left = "left", right = "right", top = "above", bottom = "below" }
+local resize_generation = 0
 
 function M.visible(view)
   local win = view.explorer_win
@@ -13,6 +15,62 @@ end
 
 local function vertical(position)
   return position == "left" or position == "right"
+end
+
+function M.resized()
+  resize_generation = resize_generation + 1
+end
+
+function M.axis(settings)
+  return vertical(settings.position) and "width" or "height"
+end
+
+local function source(view, settings, axis)
+  if axis == "width" and settings.width == nil then
+    return view.default_explorer_width
+  end
+  return settings[axis]
+end
+
+function M.pending(view)
+  local axis = M.axis(view.explorer_options)
+  local value = source(view, view.explorer_options, axis)
+  return (value == nil or type(value) == "function") and (view.explorer_generations or {})[axis] ~= resize_generation,
+    resize_generation
+end
+
+function M.prepare(view, settings, patch, automatic)
+  if not settings.visible or (automatic and not M.pending(view)) then
+    return
+  end
+  local axis = M.axis(settings)
+  local shown = M.visible(view)
+  local saved = (view.explorer_sizes or {})[axis]
+  if shown and axis == M.axis(view.explorer_options) then
+    saved = axis == "width" and vim.api.nvim_win_get_width(view.explorer_win)
+      or vim.api.nvim_win_get_height(view.explorer_win)
+  end
+  local value = source(view, settings, axis)
+  local dynamic = value == nil or type(value) == "function"
+  local evaluate = patch[axis] ~= nil
+    or settings.position ~= view.explorer_options.position
+    or (not shown and saved == nil)
+    or (dynamic and (automatic or (not shown and M.pending(view))))
+  if shown and not evaluate then
+    return
+  end
+  local generation = resize_generation
+  if not evaluate or not dynamic then
+    value = patch[axis] or saved or value
+  end
+  if type(value) == "function" then
+    value = value({ columns = vim.o.columns, lines = vim.o.lines })
+    require("diffreel.options").dimension(value, axis)
+  elseif value == nil then
+    value = math.min(35, math.max(22, math.floor(vim.o.columns * 0.2)))
+  end
+  local limit = axis == "width" and vim.o.columns - 6 or math.floor(vim.o.lines / 2)
+  return { axis = axis, size = math.min(value, math.max(1, limit)), generation = generation, automatic = automatic }
 end
 
 local function style(win, position)
@@ -35,13 +93,12 @@ local function style(win, position)
   end
 end
 
-function M.apply(view, settings, patch)
+function M.apply(view, settings, patch, sizing)
   patch = patch or {}
   local old, old_win = view.explorer_options, view.explorer_win
   local shown = M.visible(view)
   local focused = vim.api.nvim_get_current_win() == old_win
-  local left_width, right_width = vim.api.nvim_win_get_width(view.left_win), vim.api.nvim_win_get_width(view.right_win)
-  local fraction = left_width / (left_width + right_width)
+  local fraction = layout.ratio(view)
   local sizes = view.explorer_sizes or {}
   view.explorer_sizes = sizes
   if shown then
@@ -50,16 +107,8 @@ function M.apply(view, settings, patch)
     view.explorer_saved = vim.api.nvim_win_call(old_win, vim.fn.winsaveview)
   end
   local function rebalance()
-    if view.layout == "inline" or view.layout == "stacked" then
-      return
-    end
     if view.alive and vim.api.nvim_win_is_valid(view.left_win) and vim.api.nvim_win_is_valid(view.right_win) then
-      -- Moving a split can give all recovered width to one neighbor and distort a balanced diff.
-      local width = vim.api.nvim_win_get_width(view.left_win) + vim.api.nvim_win_get_width(view.right_win)
-      local target = math.max(1, math.min(width - 1, math.floor(width * fraction + 0.5)))
-      if vim.api.nvim_win_get_width(view.left_win) ~= target then
-        vim.api.nvim_win_set_width(view.left_win, target)
-      end
+      layout.balance(view, fraction)
     end
   end
   local created
@@ -77,7 +126,7 @@ function M.apply(view, settings, patch)
       rebalance()
       return
     end
-    local moved = not shown or old.position ~= settings.position or patch.position ~= nil
+    local moved = not shown or old.position ~= settings.position
     vim.api.nvim_win_call(view.right_win, function()
       if not shown then
         created = vim.api.nvim_open_win(
@@ -92,15 +141,15 @@ function M.apply(view, settings, patch)
       end
     end)
     local win = view.explorer_win
-    style(win, settings.position)
-    presentation.chrome(view, win, "Explorer")
-    if moved or patch.width ~= nil or patch.height ~= nil then
-      if vertical(settings.position) then
-        local width = patch.width or sizes.width or settings.width or view.default_explorer_width
-        vim.api.nvim_win_set_width(win, math.min(width, math.max(1, vim.o.columns - 6)))
-      else
-        local height = patch.height or sizes.height or settings.height
-        vim.api.nvim_win_set_height(win, math.min(height, math.max(1, math.floor(vim.o.lines / 2))))
+    if not sizing or not sizing.automatic then
+      style(win, settings.position)
+      presentation.chrome(view, win, "Explorer")
+    end
+    if sizing then
+      local measure = sizing.axis == "width" and vim.api.nvim_win_get_width or vim.api.nvim_win_get_height
+      local resize = sizing.axis == "width" and vim.api.nvim_win_set_width or vim.api.nvim_win_set_height
+      if measure(win) ~= sizing.size then
+        resize(win, sizing.size)
       end
     end
     if view.explorer_saved then
@@ -131,6 +180,21 @@ function M.apply(view, settings, patch)
   end
   if not ok then
     error(err, 0)
+  end
+  for _, axis in ipairs({ "width", "height" }) do
+    if patch[axis] ~= nil then
+      sizes[axis] = nil
+      if view.explorer_generations then
+        view.explorer_generations[axis] = nil
+      end
+    end
+  end
+  if sizing then
+    view.explorer_generations = view.explorer_generations or {}
+    view.explorer_generations[sizing.axis] = sizing.generation
+    if view.explorer_size_errors then
+      view.explorer_size_errors[sizing.axis] = nil
+    end
   end
 end
 

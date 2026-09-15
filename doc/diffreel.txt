@@ -239,6 +239,12 @@ attachments. It retains selection, context-fold state and split proportions
 within available screen space. Pending file selection completes in the chosen
 layout; an accepted switch cancels pending cross-file hunk navigation.
 
+Manual pane resizing sets a preferred proportion for each split layout. Editor
+resizing restores that proportion, including with a hidden explorer or numeric
+explorer dimensions. Native minimum sizes can constrain narrow/short editors;
+expanding restores the preferred proportion without accumulating rounding drift.
+Inactive reviews restore their proportions when their tabs are entered.
+
 Inline                                                     *diffreel-inline*
 
 The worktree buffer stays editable. PR, commit and index endpoints remain
@@ -405,9 +411,10 @@ max_bytes: positive integer (default 1048576)
 
                                                                *diffreel-width*
 width: positive integer or nil (default nil)
-    Explorer width in columns at view creation. With nil, use 20% of Neovim's
-    columns rounded down, clamped between 22 and 35 columns. Window layout
-    still depends on the available editor size.
+    Fallback explorer width in columns when explorer.width is omitted. This
+    legacy field accepts numbers only. With both widths omitted, use 20% of
+    Neovim's columns rounded down, clamped between 22 and 35 columns, and
+    recalculate on editor resize. See |diffreel-explorer| for functions.
 
                                                                *diffreel-paths*
 paths: string[] (default {})
@@ -507,13 +514,42 @@ explorer: table (setup() defaults and per-open overrides)
     compact:  boolean (default false)
     visible:  boolean (default true; false for a file view unless explicit)
     position: "left" (default), "right", "top" or "bottom"
-    width:    positive integer; defaults to top-level width or automatic width
-    height:   positive integer (default 10)
+    width:    positive integer or function; falls back to width or automatic
+    height:   positive integer or function (default 10)
 
     Each open() copies and merges these fields with setup() defaults. Width is
     used for left/right panels, height for top/bottom panels. Native resizing
     is remembered across hide/show. Dimensions are constrained by screen space.
     Use |diffreel.set_explorer()| to modify an existing view.
+
+    A synchronous size function receives { columns = vim.o.columns,
+    lines = vim.o.lines } and returns an integer from 1 to 2147483647. These
+    are full editor dimensions, not the remaining diff area. Functions must
+    only calculate a size, without changing editor state. Example: >lua
+        require("diffreel").setup({
+          explorer = {
+            width = function(ctx) return math.max(1, math.floor(ctx.columns / 4)) end,
+            height = function(ctx) return math.max(1, math.floor(ctx.lines / 4)) end,
+          },
+        })
+<
+    Setup validates numbers and stores functions without calling them. Only
+    the active dimension is evaluated: at first display, on a position change,
+    on explicit updates to that dimension, and after editor resizing. Changing
+    mode, compact, or only the inactive dimension does not call the function.
+
+    Functions and the default automatic width follow |VimResized|. Inactive
+    tabs defer adjustment until entered; hidden panels defer it until shown.
+    Manual sizes survive hide/show until that dimension is updated or the
+    editor resizes, even if the screen returns to its previous size. Numeric
+    settings retain native/manual resizing and are not reapplied automatically.
+
+    Width is capped at max(1, columns - 6), height at max(1, floor(lines / 2));
+    native split constraints can limit them further. A callback failure or
+    invalid result raises before an explicit open/update changes the layout.
+    Hidden opens defer this check until display. Automatic failures retain the
+    usable layout, notify once per dimension until recovery, and retry on
+    subsequent resizing or explicit updates.
 
                                                           *diffreel-line_stats*
 line_stats: boolean (default false)
@@ -930,6 +966,9 @@ set_explorer([{view}], {settings})                       *diffreel.set_explorer(
     Merge |diffreel-explorer| fields into this view and apply the layout.
     Pass nil for the current tab's review. Invalid settings raise before any
     layout change. A native layout failure preserves the comparison for retry.
+    Explicitly supplying the active size function recalculates it, even if
+    it is the same function. Hidden size updates take effect when shown.
+    No event is emitted when configuration and actual dimensions are unchanged.
 
 toggle_explorer([{view}])                            *diffreel.toggle_explorer()*
 focus_explorer([{view}])                              *diffreel.focus_explorer()*
@@ -981,7 +1020,8 @@ continues, and subsequent asynchronous work rechecks the selection and view.
 
 User DiffreelOpen                                                *DiffreelOpen*
     Once the windows, mappings and initial layout exist, before backend startup.
-    data.explorer contains the initial effective explorer options; data.layout
+    data.explorer contains the initial effective explorer options, including
+    configured size functions rather than evaluated sizes; data.layout
     identifies the initial diff layout.
 
 User DiffreelEnter                                              *DiffreelEnter*
@@ -1008,8 +1048,8 @@ User DiffreelLayoutChanged                              *DiffreelLayoutChanged*
     After an effective diff or explorer layout change through the command,
     API or mappings, including automatic inline fallback. data.explorer holds
     the explorer options. A diff-layout change also includes data.layout and
-    data.previous_layout. No-op updates do not emit it. Native manual resizing
-    is not an API layout event.
+    data.previous_layout. No-op updates do not emit it. Neither native manual
+    resizing nor automatic explorer sizing after editor resize emits it.
 
 User DiffreelReady                                              *DiffreelReady*
     Selected content is prepared and the view is not updating or in error.

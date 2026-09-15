@@ -269,6 +269,27 @@ removes accidental diff membership, and keeps the pane buffers. Rollback leaves
 the comparison available after a native layout failure. [popup.lua](../lua/diffreel/popup.lua)
 owns help and full-path floats, including partial-allocation cleanup.
 
+Explorer dimensions retain their configured number/function separately from
+saved native sizes and the last applied editor-resize generation for each axis.
+Panel preparation evaluates only the active dimension before layout mutation;
+initial preparation precedes tab allocation. `VimResized` increments a generation
+and schedules a coalesced update for the visible current review. Inactive tabs
+and hidden panels consume the latest generation when entered or shown. A
+generation change expires dynamic/manual sizes even after a screen-size round
+trip. Numeric dimensions keep native/manual resizing. Callback results are
+checked against the view lifetime and explorer update sequence before applying.
+Automatic failures leave the review usable, record the failed generation to
+avoid retrying on repeated tab entry, and suppress repeated notifications per
+axis until recovery. Automatic sizing does not emit `DiffreelLayoutChanged`.
+The layout module tracks preferred split proportions separately from its last
+applied geometry. Ordinary `WinResized` observations capture manual changes;
+`VimResized` marks every review pending before scheduling adjustments, preventing
+native editor resizing from overwriting the preferred proportions. After the
+explorer adjustment, including a failed or skipped size calculation, the active
+review restores its split proportion. Inactive reviews defer restoration until
+tab entry. Applied geometry is recorded without treating rounded or constrained
+sizes as new preferences, so repeated resizing retains the original proportion.
+
 Each view owns its fold map and hierarchy. A new snapshot or replaced retained-entry metadata rebuilds that hierarchy; selection, folding and buffer-state updates reuse it. This also applies during definition navigation. Row generation drops fold state for vanished branches and leaves new branches expanded. Tree actions change only folds and explorer cursor; they do not call the backend or replace diff buffers.
 
 Flat mode derives a sorted file-only order; compact mode projects single-child
