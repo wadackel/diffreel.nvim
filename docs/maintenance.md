@@ -74,6 +74,8 @@ ravelact wiring --root . --no-cache
 
 For timing comparisons, retain the run URL, source and executable identities, job/step durations, queue time, and cache-hit status. Compare equivalent changes with the same tool versions and test coverage, separating cold-cache and warm-cache runs. Use several runs before interpreting differences, and distinguish local suite timings from GitHub runner timings. Keep raw evidence under `.wadackel/qa/`; do not put historical pass counts or speed claims in the workflow instructions.
 
+The [2026-09-15 CI measurements](measurements/ci-2026-09-15.md) record the initial cache misses and three cache-hit reruns of the same commit, including per-target timings and comparison limits.
+
 ## Public availability
 
 Source installation and cold daemon downloads must work without GitHub authentication. The post-publication consumer jobs verify both package managers on all four supported targets at the tested commit SHA. They check the loaded plugin path, installed commit, build ID, and review behavior.
