@@ -117,9 +117,9 @@ function probe.explorer_matches(view)
     return false
   end
   if view.disk_conflict and not view.error then
-    return lines[#lines] == "Unsaved buffer differs from disk"
+    return lines[#lines] == " Unsaved buffer differs from disk"
   end
-  return lines[#lines] ~= "Unsaved buffer differs from disk"
+  return lines[#lines] ~= " Unsaved buffer differs from disk"
 end
 
 function probe.matches(view)
