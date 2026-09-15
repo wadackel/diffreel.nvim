@@ -1,16 +1,6 @@
 local M = {}
 local highlights = require("diffreel.highlights")
-local statuses = {
-  added = "A",
-  modified = "M",
-  deleted = "D",
-  renamed = "R",
-  metadata = "~",
-  limited = "!",
-  typechange = "T",
-  unchanged = "=",
-  missing = "∅",
-}
+local options = require("diffreel.options")
 
 function M.display(text)
   local escapes = { ["\\"] = "\\\\", ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t" }
@@ -224,6 +214,7 @@ end
 function M.rows(entries, collapsed, width, tree, statistics, settings)
   settings = settings or {}
   local mode, compact = settings.mode or "tree", settings.compact or false
+  local status_icons = options.status_icons(settings.status_icons)
   local has_icons, icons = pcall(require, "nvim-web-devicons")
   tree = tree or M.build(entries)
   for path, closed in pairs(collapsed) do
@@ -242,6 +233,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     and rendered.compact == compact
     and rendered.statistics == statistics
     and rendered.icons == icon_source
+    and vim.deep_equal(rendered.status_icons, status_icons)
     and vim.deep_equal(rendered.collapsed, collapsed)
     and vim.deep_equal(rendered.display, display)
     and icons_match(rendered.rows, icon_source)
@@ -252,7 +244,10 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
   local function file_row(child, depth, list)
     local prefix = " " .. string.rep("  ", depth)
     local branch = not list and child.branch
-    local marker = child.entry.buffer_only and "*" or statuses[child.entry.status] or "?"
+    local marker = child.entry.buffer_only and status_icons.buffer_only
+      or status_icons[child.entry.status]
+      or status_icons.unknown
+    local marker_width = vim.fn.strdisplaywidth(marker)
     local icon, icon_group
     if branch then
       icon = collapsed[child.path] and "▸" or "▾"
@@ -272,7 +267,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     end
     local name = M.display(list and child.path or child.name)
     if width then
-      name = shorten(name, math.max(1, width - vim.fn.strdisplaywidth(lead .. counts) - 3))
+      name = shorten(name, math.max(1, width - vim.fn.strdisplaywidth(lead .. counts) - marker_width - 3))
     end
     local text = lead .. name
     local ranges, group = {}, highlights.status(child.entry)
@@ -287,7 +282,9 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
       )
     end
     span(ranges, #lead, #text, group .. "Name")
-    text = text .. string.rep(" ", math.max(2, (width or 0) - vim.fn.strdisplaywidth(text .. counts) - 2)) .. counts
+    text = text
+      .. string.rep(" ", math.max(2, (width or 0) - vim.fn.strdisplaywidth(text .. counts) - marker_width - 1))
+      .. counts
     local count_col = #text - #counts
     local add, delete = counts:match("^(%+%d+) (%-%d+)")
     if add then
@@ -369,6 +366,7 @@ function M.rows(entries, collapsed, width, tree, statistics, settings)
     compact = compact,
     statistics = statistics,
     icons = icon_source,
+    status_icons = status_icons,
     display = display,
     collapsed = vim.deepcopy(collapsed),
     rows = rows,

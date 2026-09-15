@@ -260,6 +260,40 @@ An invalid callback result or error prevents an explicit open/update before it c
 
 Command equivalents are `--list`, `--tree`, `--compact`, `--no-compact`, `--explorer`, `--no-explorer`, and `--explorer-position=bottom`. The position also accepts its value as the next argument. Per-open `explorer` fields override the configured defaults, and live updates are confined to the supplied view.
 
+### Status icons
+
+The explorer places a colored status icon at the right edge of each file row, after saved line counts when enabled. The four Git change icons follow eda.nvim and require a Nerd Font. Font support is not detected automatically; status icons work independently of `nvim-web-devicons`.
+
+| `explorer.status_icons` key | Default |
+|---|---|
+| `added` | `` |
+| `modified` | `` |
+| `deleted` | `` |
+| `renamed` | `` |
+| `metadata` | `~` |
+| `limited` | `!` |
+| `typechange` | `T` |
+| `unchanged` | `=` |
+| `missing` | `∅` |
+| `buffer_only` | `*` |
+| `unknown` | `?` |
+
+A buffer-only row uses `buffer_only` instead of its Git status icon. These symbols describe the comparison's existing states; colors use the corresponding `DiffreelExplorer…Marker` highlight groups.
+
+For ordinary symbols without a Nerd Font:
+
+```lua
+require("diffreel").setup({
+  explorer = {
+    status_icons = { added = "+", modified = "~", deleted = "-", renamed = ">" },
+  },
+})
+```
+
+`setup()` merges each supplied key into the current defaults. `open({ explorer = { status_icons = … } })` overrides those defaults for a new comparison, and `set_explorer(view, { status_icons = … })` updates an existing view immediately. Omitted keys retain their values; input tables are copied. Later `setup()` calls leave existing views' symbols unchanged.
+
+Each value must be a nonempty string without control characters. Unknown keys and invalid values are rejected before changing configuration or a view. Multiple-character and wide symbols are supported; their display width is reserved when shortening file names and aligning the status column.
+
 ### Tree navigation
 
 Tree operations use the cursor row, independently of the file displayed in the diff. They keep explorer focus and preserve the comparison, prepared buffers, and unsaved text. Folding does not request new Git status or file content.

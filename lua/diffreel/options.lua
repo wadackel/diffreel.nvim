@@ -1,4 +1,31 @@
 local M = {}
+local status_icons = {
+  added = "",
+  modified = "",
+  deleted = "",
+  renamed = "",
+  metadata = "~",
+  limited = "!",
+  typechange = "T",
+  unchanged = "=",
+  missing = "∅",
+  buffer_only = "*",
+  unknown = "?",
+}
+
+function M.status_icons(value, base)
+  value = value == nil and {} or value
+  assert(type(value) == "table", "diffreel: explorer.status_icons must be a table")
+  local result = vim.tbl_extend("force", status_icons, base or {}, value)
+  for name, icon in pairs(result) do
+    assert(status_icons[name] ~= nil, "diffreel: unknown explorer.status_icons key " .. tostring(name))
+    assert(
+      type(icon) == "string" and icon ~= "" and not icon:find("[%z\1-\31\127]") and not icon:find("\194[\128-\159]"),
+      "diffreel: explorer.status_icons." .. name .. " must be a nonempty string without control characters"
+    )
+  end
+  return result
+end
 
 function M.dimension(value, name)
   assert(
@@ -26,7 +53,7 @@ function M.explorer(value, base)
   )
   for name in pairs(result) do
     assert(
-      vim.tbl_contains({ "mode", "compact", "visible", "position", "height", "width" }, name),
+      vim.tbl_contains({ "mode", "compact", "visible", "position", "height", "width", "status_icons" }, name),
       "diffreel: unknown explorer option " .. tostring(name)
     )
   end
@@ -41,6 +68,7 @@ function M.explorer(value, base)
       M.dimension(size, name)
     end
   end
+  result.status_icons = M.status_icons(value.status_icons, base and base.status_icons)
   return result
 end
 

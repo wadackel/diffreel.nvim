@@ -50,7 +50,7 @@ These demos use [dogrun](https://github.com/wadackel/vim-dogrun) and [nvim-web-d
 | GitHub PR review | Authenticated GitHub CLI (`gh`); optional for local comparisons |
 | Path copying | A Neovim clipboard provider; optional for other features |
 
-Windows is not supported. File icons are optional and use `nvim-web-devicons` when it is installed. LSP support uses your existing Neovim configuration.
+Windows is not supported. File icons are optional and use `nvim-web-devicons` when it is installed. Default Git status icons use a Nerd Font; [customize the symbols](#customize-status-icons) for other fonts. LSP support uses your existing Neovim configuration.
 
 ## Install
 
@@ -190,6 +190,20 @@ require("diffreel").setup({
 With lazy.nvim, put the `keymaps` table inside `opts`. Set `keymaps.defaults = false` to start with only your bindings. Custom Lua callbacks are also supported. Close all review tabs before changing keymaps; unrelated settings and identical keymaps can still be passed to `setup()` while reviews are open.
 
 See [keymap customization](docs/user-guide.md#customize-keymaps) or `:help diffreel-keymaps` for all operations, callback arguments, and reset behavior.
+
+## Customize status icons
+
+The explorer shows eda.nvim-style Git status icons on the right: `` added, `` modified, `` deleted, and `` renamed. They use the existing status colors and require a Nerd Font. To use ordinary symbols:
+
+```lua
+require("diffreel").setup({
+  explorer = {
+    status_icons = { added = "+", modified = "~", deleted = "-", renamed = ">" },
+  },
+})
+```
+
+Override only the symbols you want to change. See [status icons](docs/user-guide.md#status-icons) or `:help diffreel-status-icons` for all states and per-view settings.
 
 ## Customize highlights
 

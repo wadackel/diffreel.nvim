@@ -24,7 +24,8 @@ LSP behavior. External disk changes do not overwrite unsaved buffer text.
 
 Requirements: Neovim 0.12+, Git 2.55+, and either macOS 14+ or Linux, on arm64
 or x86_64. Windows is not supported. File icons optionally use
-nvim-web-devicons.
+nvim-web-devicons. Default Git status icons need a Nerd Font; use
+|diffreel-status-icons| to choose other symbols.
 LSP support depends on your existing language server configuration.
 
 Install with lazy.nvim or |vim.pack| using the README examples. Source and
@@ -527,6 +528,7 @@ explorer: table (setup() defaults and per-open overrides)
     position: "left" (default), "right", "top" or "bottom"
     width:    positive integer or function; falls back to width or automatic
     height:   positive integer or function (default 10)
+    status_icons: per-state symbols; see |diffreel-status-icons|
 
     Each open() copies and merges these fields with setup() defaults. Width is
     used for left/right panels, height for top/bottom panels. Native resizing
@@ -561,6 +563,36 @@ explorer: table (setup() defaults and per-open overrides)
     Hidden opens defer this check until display. Automatic failures retain the
     usable layout, notify once per dimension until recovery, and retry on
     subsequent resizing or explicit updates.
+
+                                                       *diffreel-status-icons*
+explorer.status_icons: table
+    Right-aligned status symbols, following eda.nvim for Git changes:
+        added              modified           deleted     
+        renamed            metadata    ~       limited     !
+        typechange  T       unchanged   =       missing     ∅
+        buffer_only *       unknown     ?
+
+    A buffer-only row uses buffer_only instead of its Git status. Colors use
+    the corresponding DiffreelExplorer…Marker groups; file icons and names
+    retain their separate highlights.
+
+    The four Git change icons need a Nerd Font. Fonts are not auto-detected,
+    and status symbols do not depend on nvim-web-devicons. For other fonts: >lua
+        require("diffreel").setup({
+          explorer = {
+            status_icons = { added = "+", modified = "~", deleted = "-", renamed = ">" },
+          },
+        })
+<
+    Keys merge individually: setup() updates current defaults, open() can
+    override them for a new comparison, and |diffreel.set_explorer()| updates
+    an existing view immediately. Omitted keys retain their values. Inputs
+    are copied; later setup() calls leave existing views' symbols unchanged.
+
+    Values must be nonempty strings without control characters. Invalid
+    values and unknown keys are rejected before changing configuration or
+    a view. Multiple-character and wide symbols reserve their display width
+    when clipping names and aligning the status column.
 
                                                           *diffreel-line_stats*
 line_stats: boolean (default false)

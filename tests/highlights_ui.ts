@@ -97,7 +97,7 @@ async function main() {
       const [token, color] of [
         ["alpha.txt", 0xaabb11],
         ["I", 0x22bbcc],
-        ["M", 0xdd3388],
+        ["", 0xdd3388],
         ["+1", 0x44cc55],
         ["-1", 0xee6644],
       ] as const
@@ -109,6 +109,19 @@ async function main() {
       ),
     );
     nvim.capture(out, "custom");
+    await nvim.lua(
+      "plugin.set_explorer(v,{width=28,status_icons={modified='変更'}})",
+    );
+    await flush(nvim);
+    assertEquals(style(nvim, "変更", "alpha.txt").foreground, 0xdd3388);
+    assertEquals(
+      await nvim.lua("return vim.fn.strdisplaywidth(v.rows[#v.rows].text)"),
+      27,
+    );
+    nvim.capture(out, "wide-status-icon");
+    await nvim.lua(
+      "plugin.set_explorer(v,{width=45,status_icons={modified=''}})",
+    );
     await nvim.lua("plugin.show_help(v)");
     await flush(nvim);
     assertEquals(style(nvim, "q", "close").foreground, 0x11ccee);

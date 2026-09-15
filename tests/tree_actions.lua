@@ -135,7 +135,7 @@ test("reused hierarchy follows fold width and replacement metadata changes", fun
   input[1] = { path = input[1].path, status = "deleted" }
   local fresh = explorer.build(input)
   local row = visible(explorer.rows(input, folded, 40, fresh))[input[1].path]
-  assert(row.entry == input[1] and row.text:sub(-1) == "D")
+  assert(row.entry == input[1] and row.text:sub(row.marker_col + 1) == "")
 end)
 
 for _, failure in ipairs(failures) do

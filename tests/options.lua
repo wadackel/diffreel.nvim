@@ -106,6 +106,45 @@ test("invalid command and API combinations are rejected before opening windows",
   end
 end)
 
+test("status icons inherit individual keys without sharing input tables", function()
+  local options = require("diffreel.options")
+  local config = { explorer = { status_icons = { added = "+", modified = "~" } } }
+  local input = { explorer = { status_icons = { modified = "変更" } } }
+  local resolved = options.normalize(input, config).explorer
+  eq("+", resolved.status_icons.added)
+  eq("変更", resolved.status_icons.modified)
+  eq("", resolved.status_icons.deleted)
+  local updated = options.explorer({ status_icons = { renamed = ">" } }, resolved)
+  eq("変更", updated.status_icons.modified)
+  eq(">", updated.status_icons.renamed)
+  updated.status_icons.modified = "M"
+  eq("変更", resolved.status_icons.modified)
+  eq("変更", input.explorer.status_icons.modified)
+  eq("~", config.explorer.status_icons.modified)
+  local plugin = require("diffreel")
+  plugin.setup(config)
+  plugin.setup(input)
+  eq("+", plugin.config.explorer.status_icons.added)
+  eq("変更", plugin.config.explorer.status_icons.modified)
+end)
+
+test("invalid status icons leave configured settings intact", function()
+  local options, plugin = require("diffreel.options"), require("diffreel")
+  local before = vim.deepcopy(plugin.config)
+  for _, icons in ipairs({ false, "M", { unknown_key = "?" }, { modified = false }, { modified = "" } }) do
+    local input = { explorer = { status_icons = icons } }
+    assert(not pcall(options.normalize, input, {}), vim.inspect(icons))
+    assert(not pcall(plugin.setup, input), vim.inspect(icons))
+    eq(before, plugin.config)
+  end
+  for _, char in ipairs({ "\0", "\n", "\r", "\t", "\27", "\127", "\194\133" }) do
+    local input = { explorer = { status_icons = { modified = "a" .. char .. "b" } } }
+    assert(not pcall(options.normalize, input, {}), vim.inspect(char))
+    assert(not pcall(plugin.setup, input), vim.inspect(char))
+    eq(before, plugin.config)
+  end
+end)
+
 test("initial file preferences remain literal repository-relative paths", function()
   local options = require("diffreel.options")
   eq("src/a.lua", options.preferred_path("/repo", "/repo/src/a.lua", nil))
