@@ -37,8 +37,12 @@ function M.icon(icons, name)
   return (icons or defaults)[name]
 end
 
+function M.prefix(icon, text)
+  return icon .. " " .. text
+end
+
 function M.label(icons, name, text)
-  return M.icon(icons, name) .. " " .. text
+  return M.prefix(M.icon(icons, name), text)
 end
 
 function M.winbar(text)

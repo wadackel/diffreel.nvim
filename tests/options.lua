@@ -145,6 +145,66 @@ test("invalid status icons leave configured settings intact", function()
   end
 end)
 
+test("spinner settings inherit individual keys without sharing input tables", function()
+  local options, spinner = require("diffreel.options"), require("diffreel.spinner")
+  eq(spinner.defaults, options.spinner(nil, nil))
+  local defaults = options.spinner(nil, nil)
+  defaults.frames[1] = "x"
+  eq("⠋", spinner.defaults.frames[1])
+  local input = { frames = { "-", "|" } }
+  local resolved = options.spinner(input, nil)
+  eq({ "-", "|" }, resolved.frames)
+  eq(80, resolved.interval)
+  resolved.frames[1] = "+"
+  eq("-", input.frames[1])
+  local updated = options.spinner({ interval = 120 }, resolved)
+  eq({ "+", "|" }, updated.frames)
+  eq(120, updated.interval)
+  eq(false, options.spinner(false, nil))
+  eq(false, options.spinner(nil, false))
+  eq(spinner.defaults.frames, options.spinner({ interval = 200 }, false).frames)
+  eq(200, options.spinner({ interval = 200 }, false).interval)
+end)
+
+test("invalid spinner settings are rejected and leave configuration intact", function()
+  local options, plugin = require("diffreel.options"), require("diffreel")
+  local before = vim.deepcopy(plugin.config)
+  for _, value in ipairs({
+    "braille",
+    0,
+    { frames = {} },
+    { frames = "⠋" },
+    { frames = { "⠋", "あ" } },
+    { frames = { "⠋", "" } },
+    { frames = { "⠋", "a\tb" } },
+    { frames = { "⠋", "a\194\133b" } },
+    { interval = 15 },
+    { interval = 80.5 },
+    { interval = "80" },
+    { unknown_key = 1 },
+  }) do
+    assert(not pcall(options.spinner, value, nil), vim.inspect(value))
+    assert(not pcall(plugin.setup, { spinner = value }), vim.inspect(value))
+    eq(before, plugin.config)
+  end
+end)
+
+test("spinner is a setup option that open() does not carry", function()
+  local options, plugin = require("diffreel.options"), require("diffreel")
+  assert(not pcall(options.normalize, { spinner = false }, {}), "normalize accepted a per-open spinner")
+  assert(not pcall(options.normalize, { spinner = { interval = 100 } }, {}), "normalize accepted a per-open spinner")
+  plugin.setup({ spinner = { interval = 160 } })
+  eq(160, plugin.config.spinner.interval)
+  eq(require("diffreel.spinner").defaults.frames, plugin.config.spinner.frames)
+  plugin.setup({})
+  eq(160, plugin.config.spinner.interval)
+  plugin.setup({ spinner = false })
+  eq(false, plugin.config.spinner)
+  plugin.setup({})
+  eq(false, plugin.config.spinner)
+  plugin.setup({ spinner = { interval = 80 } })
+end)
+
 test("initial file preferences remain literal repository-relative paths", function()
   local options = require("diffreel.options")
   eq("src/a.lua", options.preferred_path("/repo", "/repo/src/a.lua", nil))

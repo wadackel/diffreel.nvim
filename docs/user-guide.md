@@ -366,6 +366,22 @@ require("diffreel").setup({
 
 The key-list popup displays readable action labels such as `Next file` and `Copy relative path`; custom functions appear as `Custom action`. Configuration and the Lua API continue to use operation IDs such as `next_file` and `yank_path`.
 
+### Spinner
+
+The loading symbol animates while a review is waiting. The diff window's `Loading` winbar and the explorer's `Loading…`, `Updating…` and `Counting saved lines…` rows take the place of `ui_icons.loading` with a spinner frame, so a waiting row keeps one indicator rather than gaining a second one. A single timer supplies the frame number to every label in every review, so labels that appear together always show the same frame.
+
+```lua
+require("diffreel").setup({
+  spinner = { frames = { "|", "/", "-", "\\" }, interval = 120 },
+})
+```
+
+`frames` is a nonempty array of strings without control characters, all sharing one display width so the label does not shift sideways between frames. `interval` is the delay in milliseconds and must be 16 or more. The ten Braille frames used by default need no Nerd Font. `spinner = false` disables the animation and leaves the static `ui_icons.loading` symbol in place. A review stopped by an error does not animate either, because saved-line counting cannot resume while the error is set.
+
+This is a `setup()` option. `open()` rejects it, like `ui_icons`. A later `setup()` applies to reviews that are already open, unlike `ui_icons`, which each view copies when it opens.
+
+The timer runs only while at least one review is waiting. Each frame redraws the explorer of every waiting review in the current tabpage; reviews in other tabpages keep their frame until the tab is entered again. The redraw is proportional to the number of rows, so a review with several thousand changed files is cheaper with fewer frames or a longer interval. Work that finishes within one interval shows no motion at all.
+
 ### Tree navigation
 
 Tree operations use the cursor row, independently of the file displayed in the diff. They keep explorer focus and preserve the comparison, prepared buffers, and unsaved text. Folding does not request new Git status or file content.

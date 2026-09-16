@@ -234,6 +234,20 @@ require("diffreel").setup({
 
 Each review keeps the icons configured when it opens. See [UI icons](docs/user-guide.md#ui-icons) or `:help diffreel-ui-icons` for all symbols and a complete alternative for other fonts. Git status markers remain configurable through `explorer.status_icons`.
 
+## Customize the spinner
+
+While a review is waiting, the loading symbol animates instead of standing still: the diff winbar and the explorer's progress rows show one spinner frame at a time, all driven by a single timer. The default is ten Braille frames at 80 ms, which needs no Nerd Font. To use plain ASCII, or to keep the static symbol:
+
+```lua
+require("diffreel").setup({
+  spinner = { frames = { "|", "/", "-", "\\" }, interval = 120 },
+})
+
+require("diffreel").setup({ spinner = false })
+```
+
+All frames must share one display width so the label does not shift between frames. See [spinner](docs/user-guide.md#spinner) or `:help diffreel-spinner` for the validation rules and the cost on very large reviews.
+
 ## Customize highlights
 
 Set individual UI colors without changing Neovim's standard highlight groups:
