@@ -6,6 +6,7 @@ local highlights = require("diffreel.highlights")
 local install = require("diffreel.install")
 local distribution = require("diffreel.distribution")
 local options = require("diffreel.options")
+local spinner = require("diffreel.spinner")
 local completion = require("diffreel.completion")
 local help = require("diffreel.help")
 local line_stats = require("diffreel.line_stats")
@@ -173,13 +174,13 @@ local function header_path(path)
     .. "%*"
 end
 
-local function render(view, cursor_path)
+local function render(view, cursor_path, frame_only)
   if not valid(view) or not vim.api.nvim_buf_is_valid(view.explorer_buf) then
     return
   end
   if view.error or not view.ready then
     local label = view.error and ui.label(view.ui_icons, "error", "Update stopped: " .. explorer.display(view.error))
-      or ui.label(view.ui_icons, "loading", "Loading " .. title(view))
+      or ui.prefix(spinner.frame() or ui.icon(view.ui_icons, "loading"), "Loading " .. title(view))
     local group = view.error and "DiffreelExplorerError" or "DiffreelDiffWinbarState"
     presentation.header(
       view,
@@ -233,7 +234,11 @@ local function render(view, cursor_path)
   end
   local details, footer_rows = {}, {}
   local function append(text, group, id, icon)
-    for _, part in ipairs(ui.wrap(icon and ui.label(view.ui_icons, icon, text) or text, width)) do
+    -- Overlaying the frame as a separate extmark would land it on the continuation lines
+    -- ui.wrap produces, so the frame replaces the icon in the slot ui.label already reserves.
+    local glyph = icon == "loading" and not view.error and spinner.frame() or nil
+    local label = icon and (glyph and ui.prefix(glyph, text) or ui.label(view.ui_icons, icon, text)) or text
+    for _, part in ipairs(ui.wrap(label, width)) do
       lines[#lines + 1] = part.text
       part.id = id or group
       footer_rows[#lines] = part
@@ -366,6 +371,9 @@ local function render(view, cursor_path)
     }
   end
   view.footer_rows = footer_rows
+  if frame_only then
+    return
+  end
   local explicit = cursor_path or view.reveal_path
   local target = explorer.cursor_path(rows, explicit or (old and old.path) or view.selected_path)
   if not explicit and footer_anchor then
@@ -403,6 +411,39 @@ local function render(view, cursor_path)
   view.reveal_path = nil
   full_name.update(view)
 end
+
+local function loading(view)
+  -- A stopped review never animates: line_stats.start only runs from ready(), which
+  -- requires no error, so a pending counter on an errored view would never resolve.
+  if not valid(view) or view.closing or view.error then
+    return false
+  end
+  if view.updating or not view.ready then
+    return true
+  end
+  if not view.line_stats then
+    return false
+  end
+  local stats = line_stats.current(view)
+  return not stats or stats.pending == true
+end
+
+local function animate()
+  local pending = false
+  for _, view in pairs(M.views) do
+    if loading(view) then
+      -- A hidden view skips the redraw but still keeps the timer alive; stopping here
+      -- would leave its glyph frozen at whatever frame was current when the tab left.
+      pending = true
+      if vim.api.nvim_get_current_tabpage() == view.tab then
+        pcall(render, view, nil, true)
+      end
+    end
+  end
+  return pending
+end
+
+spinner.register(animate)
 
 local function actions(scope)
   return keymaps.bindings(active_keymaps[scope], M, render)
@@ -2214,6 +2255,7 @@ function M.shutdown()
     return
   end
   shutting_down = true
+  spinner.stop()
   for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
     dispose(view)
   end
@@ -2233,6 +2275,7 @@ function M.setup(opts)
   local config = vim.tbl_extend("force", M.config, opts)
   config.explorer = options.explorer(opts.explorer, M.config.explorer)
   config.ui_icons = ui.resolve(opts.ui_icons, M.config.ui_icons)
+  config.spinner = options.spinner(opts.spinner, M.config.spinner)
   options.validate(config)
   assert(config.backend == "rust", "diffreel uses Rust; remove the legacy backend option")
   for _, name in ipairs({ "width", "max_bytes", "reconcile_ms" }) do
@@ -2269,6 +2312,7 @@ function M.setup(opts)
   local colors = highlights.prepare(config.on_highlight)
   highlights.apply(colors)
   M.config, active_keymaps = config, resolved
+  spinner.configure(config.spinner)
   vim.api.nvim_create_user_command("Diffreel", function(args)
     local values = args.fargs
     if #values == 0 then

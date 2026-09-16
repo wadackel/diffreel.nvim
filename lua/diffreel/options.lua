@@ -1,3 +1,4 @@
+local spinner = require("diffreel.spinner")
 local M = {}
 local status_icons = {
   added = "",
@@ -75,6 +76,42 @@ function M.explorer(value, base)
   return result
 end
 
+function M.spinner(value, base)
+  if value == nil then
+    return base == nil and vim.deepcopy(spinner.defaults) or base
+  end
+  if value == false then
+    return false
+  end
+  assert(type(value) == "table", "diffreel: spinner must be a table or false")
+  local result = vim.tbl_extend("force", spinner.defaults, type(base) == "table" and base or {}, value)
+  for name in pairs(result) do
+    assert(name == "frames" or name == "interval", "diffreel: unknown spinner option " .. tostring(name))
+  end
+  assert(
+    vim.islist(result.frames) and #result.frames > 0,
+    "diffreel: spinner.frames must be a nonempty array of strings"
+  )
+  local width
+  for _, frame in ipairs(result.frames) do
+    string_option(frame, "spinner.frames entry", false)
+    assert(
+      not frame:find("[%z\1-\31\127]") and not frame:find("\194[\128-\159]"),
+      "diffreel: spinner.frames entries must not contain control characters"
+    )
+    local size = vim.fn.strdisplaywidth(frame)
+    -- Frames of differing widths shift the label sideways on every tick.
+    assert(width == nil or size == width, "diffreel: spinner.frames must share one display width")
+    width = size
+  end
+  assert(
+    type(result.interval) == "number" and result.interval % 1 == 0 and result.interval >= 16,
+    "diffreel: spinner.interval must be an integer of at least 16"
+  )
+  result.frames = vim.deepcopy(result.frames)
+  return result
+end
+
 function M.validate(opts)
   assert(type(opts) == "table", "diffreel: options must be a table")
   assert(
@@ -143,6 +180,7 @@ end
 function M.normalize(opts, config)
   M.validate(opts)
   assert(opts.ui_icons == nil, "diffreel: ui_icons is a setup() option")
+  assert(opts.spinner == nil, "diffreel: spinner is a setup() option")
   config = config or {}
   local function value(name, fallback)
     if opts[name] ~= nil then

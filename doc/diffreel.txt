@@ -384,6 +384,8 @@ Configure before opening a review: >lua
       untracked = true,
       line_stats = false,
       layout = "side_by_side",
+      spinner = { frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" },
+                  interval = 80 },
     })
 <
 These are the effective runtime defaults. Omitted settings use their defaults.
@@ -639,11 +641,51 @@ ui_icons: table (setup() only)
     nvim-web-devicons when available. Folder symbols use DirectoryIcon;
     other symbols share their label's highlight group.
 
+    The loading symbol animates while work is in flight; see
+    |diffreel-spinner|.
+
     Pane labels distinguish Worktree from Unsaved. The Changes header shows
     the selected file position and total as 2 / 3. Status descriptions wrap
     to the explorer width; continuation lines indent by two spaces where
     space permits. Reflow preserves the cursor's message and text position;
     removing that message keeps the cursor in the remaining footer.
+
+                                                             *diffreel-spinner*
+spinner: table or false (setup() only)
+    Animation for the loading symbol. While a review is waiting, the symbol
+    ui_icons.loading marks is replaced frame by frame, so the waiting rows
+    keep one indicator rather than gaining a second one. The diff window's
+    "Loading" winbar and the explorer's "Loading…", "Updating…" and
+    "Counting saved lines…" rows all read the same frame from one timer, so
+    labels that appear together never drift apart.
+
+    frames:   array of strings (default the ten Braille frames above)
+    interval: milliseconds between frames, 16 or more (default 80)
+
+    Every frame must be a nonempty string without control characters, and
+    all frames must share one display width so the label does not shift
+    sideways between frames. The Braille default needs no Nerd Font.
+    For plain ASCII: >lua
+        require("diffreel").setup({
+          spinner = { frames = { "|", "/", "-", "\\" }, interval = 120 },
+        })
+<
+    false disables the animation, and the waiting rows show the static
+    ui_icons.loading symbol instead: >lua
+        require("diffreel").setup({ spinner = false })
+<
+    A stopped review does not animate: saved-line counting cannot resume
+    while an error is set, so those rows keep the static symbol.
+
+    Each frame redraws the explorer of every waiting review in the current
+    tabpage; reviews in other tabpages keep their frame until the tab is
+    entered again. The redraw is proportional to the number of rows, so a
+    review with several thousand changed files is cheaper with fewer frames
+    or a longer interval. Work that finishes within one interval shows no
+    motion at all. This is a setup() option; open() does not accept it.
+
+    One timer is shared by every review, so a later setup() applies to
+    reviews that are already open, unlike |diffreel-ui-icons|.
 
                                                           *diffreel-line_stats*
 line_stats: boolean (default false)

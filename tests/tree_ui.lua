@@ -94,7 +94,12 @@ local function test(name, body)
     for _, path in ipairs(paths) do
       write(path, "return 2\n")
     end
-    plugin.setup({ daemon = vim.env.DIFFREEL_DAEMON, watch = false, keymaps = {} })
+    plugin.setup({
+      daemon = vim.env.DIFFREEL_DAEMON,
+      watch = false,
+      keymaps = {},
+      spinner = require("diffreel.spinner").defaults,
+    })
     view = plugin.open({ root = root })
     ready(view)
     body({ root = root, view = view, write = write, git = git, paths = paths })
@@ -355,6 +360,243 @@ test("fold state is independent between reviews and empty trees are safe", funct
   local old = clipboard
   input("^<C-h>EWgEgWypyPyn")
   assert(clipboard == old and #second.rows == 0 and second.alive)
+end)
+
+local function loading_icon()
+  return require("diffreel.ui").icon(nil, "loading")
+end
+local function spinner_glyph(text)
+  for _, candidate in ipairs(require("diffreel.spinner").defaults.frames) do
+    if text:find(candidate, 1, true) then
+      return candidate
+    end
+  end
+end
+local function explorer_text(view)
+  return table.concat(vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false), "\n")
+end
+
+test("progress labels carry a spinner frame while work is in flight", function(t)
+  local view = t.view
+  assert(not spinner_glyph(explorer_text(view)), "Quiescent explorer showed a spinner frame")
+  plugin.refresh(view)
+  local updating = explorer_text(view)
+  assert(view.updating, "refresh did not mark the view as updating")
+  assert(updating:find("Updating…", 1, true), updating)
+  assert(spinner_glyph(updating), "Updating label had no spinner frame: " .. updating)
+  assert(
+    not updating:find(loading_icon(), 1, true),
+    "The static loading icon was drawn beside the spinner: " .. updating
+  )
+  ready(view)
+  assert(not spinner_glyph(explorer_text(view)), "Spinner frame survived the update")
+  local second = plugin.open({ root = t.root })
+  local winbar = vim.wo[second.left_win].winbar
+  assert(spinner_glyph(winbar), "Loading winbar had no spinner frame: " .. winbar)
+  assert(not winbar:find(loading_icon(), 1, true), "The static loading icon was drawn beside the spinner: " .. winbar)
+  ready(second)
+  assert(not spinner_glyph(vim.wo[second.left_win].winbar))
+  plugin.close(second)
+end)
+
+test("every waiting label in a review shows the same frame", function(t)
+  require("diffreel.spinner").stop()
+  local second = plugin.open({ root = t.root })
+  local winbar = spinner_glyph(vim.wo[second.left_win].winbar)
+  local body = spinner_glyph(explorer_text(second))
+  assert(winbar and body, "A waiting review had no spinner glyph: " .. explorer_text(second))
+  assert(winbar == body, "The winbar and the explorer disagreed: " .. winbar .. " vs " .. body)
+  ready(second)
+  plugin.close(second)
+end)
+
+test("a disabled spinner leaves the progress labels static", function(t)
+  local view = t.view
+  plugin.setup({ spinner = false })
+  plugin.refresh(view)
+  local updating = explorer_text(view)
+  assert(updating:find("Updating…", 1, true), updating)
+  assert(not spinner_glyph(updating), "Disabled spinner still rendered a frame: " .. updating)
+  assert(updating:find(loading_icon(), 1, true), "Disabled spinner lost the static loading icon: " .. updating)
+  ready(view)
+end)
+
+local function pump()
+  local drained = false
+  vim.schedule(function()
+    drained = true
+  end)
+  assert(
+    vim.wait(1000, function()
+      return drained
+    end),
+    "Event loop did not drain"
+  )
+end
+local function capture_timer(start)
+  local state, real = {}, vim.uv.new_timer
+  -- The backend also creates timers inside the same call; only the spinner repeats.
+  vim.uv.new_timer = function()
+    local handle
+    handle = {
+      start = function(_, delay, period, callback)
+        if period > 0 then
+          state.delay, state.period, state.tick, state.handle = delay, period, callback, handle
+        end
+      end,
+      stop = function() end,
+      is_closing = function()
+        return handle.closed == true
+      end,
+      close = function()
+        handle.closed = true
+      end,
+    }
+    return handle
+  end
+  local ok, err = pcall(start)
+  vim.uv.new_timer = real
+  assert(ok, err)
+  return state
+end
+local function timer_closed(state)
+  return state.handle ~= nil and state.handle.closed == true
+end
+-- Withholding a single method is not enough to keep a view loading: the daemon
+-- answers fast enough that the state can resolve inside one event-loop turn.
+local function freeze(view)
+  local backend, held, holding = view.manager.backend, {}, true
+  local request = backend.request
+  backend.request = function(self, name, params, done)
+    return request(self, name, params, function(failure, result)
+      if holding then
+        held[#held + 1] = function()
+          done(failure, result)
+        end
+      else
+        done(failure, result)
+      end
+    end)
+  end
+  return function()
+    holding = false
+    backend.request = request
+    for _, replay in ipairs(held) do
+      replay()
+    end
+  end
+end
+local function marks(view)
+  return #vim.api.nvim_buf_get_extmarks(view.explorer_buf, vim.api.nvim_create_namespace("diffreel"), 0, -1, {})
+end
+
+test("the shared timer advances every progress label without disturbing the explorer", function(t)
+  local view, frames = t.view, require("diffreel.spinner").defaults.frames
+  local release = freeze(view)
+  require("diffreel.spinner").stop()
+  cursor(view, "src/a.lua")
+  local path = cursor_path(view)
+  local timer = capture_timer(function()
+    plugin.refresh(view)
+  end)
+  assert(timer.tick, "Refresh did not start the spinner timer")
+  assert(timer.delay == 80 and timer.period == 80, "Timer is not repeating: " .. vim.inspect(timer))
+  local viewport = vim.api.nvim_win_call(view.explorer_win, vim.fn.winsaveview)
+  local baseline, seen = marks(view), {}
+  local initial = spinner_glyph(explorer_text(view))
+  assert(initial, "Updating label had no spinner glyph: " .. explorer_text(view))
+  seen[initial] = true
+  for index = 1, #frames - 1 do
+    timer.tick()
+    pump()
+    local text = explorer_text(view)
+    local glyph = spinner_glyph(text)
+    assert(glyph, "Frame " .. index .. " lost its spinner glyph: " .. text)
+    assert(text:find("Updating…", 1, true), text)
+    seen[glyph] = true
+    assert(marks(view) == baseline, "Extmark count drifted on frame " .. index)
+  end
+  assert(vim.tbl_count(seen) == #frames, "Frames did not advance: " .. vim.inspect(seen))
+  assert(cursor_path(view) == path, "A frame moved the explorer cursor")
+  assert(
+    vim.deep_equal(viewport, vim.api.nvim_win_call(view.explorer_win, vim.fn.winsaveview)),
+    "A frame moved the explorer viewport"
+  )
+  release()
+  ready(view)
+  timer.tick()
+  pump()
+  assert(timer_closed(timer), "Timer was not closed once no view was loading")
+  assert(not spinner_glyph(explorer_text(view)), "Spinner glyph survived the update")
+end)
+
+test("a pending selection spins the diff winbar", function(t)
+  local view, frames = t.view, require("diffreel.spinner").defaults.frames
+  local release = freeze(view)
+  require("diffreel.spinner").stop()
+  local timer = capture_timer(function()
+    plugin.select(view, "src/deep/b.lua")
+  end)
+  assert(not view.ready, "select did not clear the ready flag")
+  assert(timer.tick, "A pending selection did not start the spinner timer")
+  local initial = spinner_glyph(vim.wo[view.left_win].winbar)
+  assert(initial, "Loading winbar had no spinner glyph: " .. vim.wo[view.left_win].winbar)
+  local seen = { [initial] = true }
+  for index = 1, #frames - 1 do
+    timer.tick()
+    pump()
+    local winbar = vim.wo[view.left_win].winbar
+    local glyph = spinner_glyph(winbar)
+    assert(glyph, "Frame " .. index .. " lost the winbar glyph: " .. winbar)
+    assert(winbar:find("Loading ", 1, true), winbar)
+    seen[glyph] = true
+  end
+  assert(vim.tbl_count(seen) == #frames, "Winbar frames did not advance: " .. vim.inspect(seen))
+  release()
+  ready(view, "src/deep/b.lua")
+  assert(not spinner_glyph(vim.wo[view.left_win].winbar), "Winbar glyph survived the selection")
+end)
+
+test("a view in another tabpage is not redrawn but keeps the timer alive", function(t)
+  local view = t.view
+  local second = plugin.open({ root = t.root })
+  ready(second)
+  assert(second.tab ~= view.tab, "The second review did not open in its own tabpage")
+  local release = freeze(second)
+  require("diffreel.spinner").stop()
+  local timer = capture_timer(function()
+    plugin.refresh(second)
+  end)
+  assert(timer.tick, "Refresh did not start the spinner timer")
+  vim.api.nvim_set_current_tabpage(view.tab)
+  local changes = vim.api.nvim_buf_get_changedtick(second.explorer_buf)
+  for _ = 1, 3 do
+    timer.tick()
+    pump()
+  end
+  assert(vim.api.nvim_buf_get_changedtick(second.explorer_buf) == changes, "A hidden review was redrawn by the spinner")
+  assert(not timer_closed(timer), "The timer stopped while a hidden review was still loading")
+  release()
+  ready(second)
+  plugin.close(second)
+end)
+
+test("a stopped review does not animate the saved-line counter", function(t)
+  local second = plugin.open({ root = t.root, left = "no-such-revision", line_stats = true })
+  assert(
+    vim.wait(5000, function()
+      return second.error ~= nil
+    end, 5),
+    "The review did not report an error"
+  )
+  local before = explorer_text(second)
+  assert(before:find("Update stopped", 1, true), before)
+  assert(not spinner_glyph(before), "A stopped review rendered a spinner glyph: " .. before)
+  vim.wait(400, function()
+    return false
+  end)
+  assert(explorer_text(second) == before, "A stopped review kept redrawing:\n" .. explorer_text(second))
+  plugin.close(second)
 end)
 
 test("refresh preserves the explorer cursor column and non-entry rows", function(t)
