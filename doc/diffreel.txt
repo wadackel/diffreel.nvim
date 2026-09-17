@@ -647,17 +647,27 @@ ui_icons: table (setup() only)
     Pane labels distinguish Worktree from Unsaved. The Changes header shows
     the selected file position and total as 2 / 3. Status descriptions wrap
     to the explorer width; continuation lines indent by two spaces where
-    space permits. Reflow preserves the cursor's message and text position;
-    removing that message keeps the cursor in the remaining footer.
+    space permits.
+
+    "Updating…", "Counting saved lines…", "Paused" and "Update stopped" are
+    pinned to the bottom of the explorer pane and stay visible however long
+    the tree is. The cursor never enters them, and the rows they cover are
+    kept blank so no file row or message is hidden behind them. If they would
+    need more than half the pane, the whole block is written into the buffer
+    instead, where it scrolls with the tree and holds no cursor of its own.
+    "Saved lines", "Unsaved buffer differs from disk" and the selected file's
+    details stay in the buffer and scroll with the tree. Reflow preserves the
+    cursor's message and text position; removing that message keeps the
+    cursor in the remaining footer.
 
                                                              *diffreel-spinner*
 spinner: table or false (setup() only)
     Animation for the loading symbol. While a review is waiting, the symbol
     ui_icons.loading marks is replaced frame by frame, so the waiting rows
     keep one indicator rather than gaining a second one. The diff window's
-    "Loading" winbar and the explorer's "Loading…", "Updating…" and
-    "Counting saved lines…" rows all read the same frame from one timer, so
-    labels that appear together never drift apart.
+    "Loading" winbar, the explorer's "Loading…" row and the pinned
+    "Updating…" and "Counting saved lines…" rows all read the same frame from
+    one timer, so labels that appear together never drift apart.
 
     frames:   array of strings (default the ten Braille frames above)
     interval: milliseconds between frames, 16 or more (default 80)
