@@ -755,6 +755,7 @@ local function select(view, path, reveal, prepared)
     inline.clear(view)
   end
   view.initial_selection_done = true
+  view.deferred_path = nil
   view.selection_seq = view.selection_seq + 1
   local sequence, comparison_id = view.selection_seq, view.comparison.comparison_id
   local session_id = view.manager.session_id
@@ -1060,6 +1061,12 @@ function M.select(view, path)
       pr.cancel(view)
       view.updating = false
     end
+    if view.switching and view.by_path and view.by_path[path] then
+      view.deferred_path, view.reveal_path = path, path
+      explorer.reveal(view.collapsed, path)
+      render(view)
+      return
+    end
   end
   return select(view, path, true)
 end
@@ -1120,6 +1127,11 @@ local function receive(view, snapshot, prepared)
   if not view.initial_selection_done then
     view.initial_selection_done = true
     selected = view.preferred_path and view.by_path[view.preferred_path] or selected
+  end
+  local deferred = view.deferred_path
+  view.deferred_path = nil
+  if deferred and view.by_path[deferred] then
+    selected = view.by_path[deferred]
   end
   if not selected then
     selected = view.entries[1]
@@ -1188,6 +1200,7 @@ local function open_comparison(view)
     end
     view.switching = false
     if err then
+      view.deferred_path = nil
       view.error, view.updating = tostring(err), false
       render(view)
       return
@@ -1220,7 +1233,7 @@ local function activate_pr(view, snapshot, metadata, prepared)
   view.spec.left, view.spec.right = metadata.merge_base, metadata.head
   view.resolved_spec = vim.deepcopy(view.spec)
   view.comparison, view.ready, view.selection_pending, view.switching = nil, false, false, false
-  view.selected_path = prepared and prepared.path or nil
+  view.selected_path, view.deferred_path = prepared and prepared.path or nil, nil
   receive(view, snapshot, prepared)
 end
 
@@ -1252,7 +1265,7 @@ local function get_manager(view, callback)
     manager.waiters[#manager.waiters + 1] = waiter
     return
   end
-  manager = { root = root, waiters = { waiter }, ready = false, key = root }
+  manager = { root = root, waiters = { waiter }, ready = false, key = root, watch = M.config.watch ~= false }
   view.pending_manager = manager
   M.managers[root] = manager
   local config = vim.tbl_extend("force", M.config, { root = root })
@@ -2129,7 +2142,7 @@ local function dispose(view)
   pr.cancel(view)
   leave(view)
   view.alive = false
-  view.pending_hunk = nil
+  view.pending_hunk, view.deferred_path = nil, nil
   M.views[view.id] = nil
   local pending = view.pending_manager
   view.pending_manager = nil
@@ -2660,7 +2673,20 @@ function M.setup(opts)
           mutable = mutable or (path:sub(1, 2) == ":(" and path:find("attr:", 1, true) ~= nil)
         end
         if valid(view) and not view.pr_target and view.tab == vim.api.nvim_get_current_tabpage() and mutable then
-          M.refresh(view)
+          local manager = view.manager
+          -- Monitoring already reconciles changes; a focus refresh would make the next selection wait for Git.
+          if manager and manager.watch and manager.backend and not manager.backend.closed and view.comparison then
+            if not view.switching then
+              manager.backend:request("view/update", {
+                view_id = view.id,
+                comparison_id = view.comparison.comparison_id,
+                visible = true,
+                path = view.selected_path,
+              }, function() end)
+            end
+          else
+            M.refresh(view)
+          end
         end
       end
     end,
