@@ -184,6 +184,8 @@ The `g?` popup reflects resolved leaders, aliases, custom callbacks, disabled ma
 
 File navigation follows the explorer's file order, including files inside folded branches. It starts from the selected comparison file, accepts counts such as `2<Tab>` or `2]f`, reveals collapsed parent directories, and stops at the first or last file. Clicking into another explorer row without selecting it does not change the starting point for next/previous navigation. At a navigation boundary, the selected file is revealed again without reloading its content.
 
+Selecting a different file, including an automatic reselection after a refresh, shows both diff panes from the first line so they stay aligned; revisiting a file does not restore its previous scroll position. Refreshing, editing, or saving the selected file keeps the current position.
+
 For supported worktree files, the right pane uses the same real buffer as ordinary editing windows. Your configured LSP can attach to it. Use your existing hover and definition mappings; a definition jump temporarily pauses the comparison in that pane. Return to the source buffer or select another file to resume it. Virtual revision buffers do not become LSP clients.
 
 Closing a review preserves real buffers and their unsaved text. Closing, moving, or replacing one of its panes with ordinary Neovim commands releases that review; surviving file windows remain usable. `:DiffreelClose` and `:DiffreelRefresh` also work from extra splits in the review tab. Buffer mappings act only in diffreel's own panes.

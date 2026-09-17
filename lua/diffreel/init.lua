@@ -898,6 +898,17 @@ local function select(view, path, reveal, prepared)
       end)
       presentation.inline(view, view.right_win)
     end
+    -- Native diff does not resynchronize diverged views until a pane scrolls: the reused left buffer keeps
+    -- the previous file's view while the right buffer restores its own. Resetting on every reapplication
+    -- would instead jump to the top on each edit or refresh of the same file.
+    if view.positioned_path ~= path then
+      view.positioned_path, view.saved_left_view = path, nil
+      for _, win in ipairs({ view.left_win, view.right_win, view.right_engine }) do
+        vim.api.nvim_win_call(win, function()
+          vim.fn.winrestview({ lnum = 1, col = 0, topline = 1, topfill = 0, leftcol = 0 })
+        end)
+      end
+    end
     vim.schedule(function()
       if not current() then
         return
@@ -1149,6 +1160,7 @@ local function receive(view, snapshot, prepared)
   elseif not selected then
     view.selection_seq = view.selection_seq + 1
     view.selected_path, view.ready, view.selection_pending = nil, true, false
+    view.positioned_path = nil
     view.disk_conflict = false
     local previous_buf = view.right_buf
     view.right_buf = view.empty_buf

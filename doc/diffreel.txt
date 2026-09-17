@@ -213,6 +213,10 @@ file without wrapping. It starts from the selected comparison file, not an
 unselected explorer row. For example, 2<Tab> moves two files.
 At either boundary the selected file is revealed without a new content read.
 
+Selecting a different file, including automatic reselection, shows both diff
+panes from the first line; a revisit does not restore the old position.
+Refreshing, editing or saving the selected file keeps the current position.
+
 The README's <Leader>gD mapping is an example global toggle; setup() does not
 install it. Configure your leader before setup. Mappings on real buffers
 preserve ordinary-window behavior and are restored when diffreel releases them.
