@@ -1357,6 +1357,27 @@ mod tests {
         String::from_utf8(output.stdout).unwrap().trim().into()
     }
 
+    fn all_statistics(repo: &mut Repository, comparison_id: &Value, generation: &Value) -> Value {
+        let mut files = serde_json::Map::new();
+        let mut offset = 0;
+        loop {
+            let page = repo
+                .handle(
+                    "comparison/stats",
+                    &json!({"comparison_id":comparison_id,"generation":generation,"offset":offset}),
+                )
+                .unwrap();
+            assert_eq!(&page["generation"], generation);
+            files.extend(page["files"].as_object().unwrap().clone());
+            if page["complete"] == true {
+                return json!({ "files": files });
+            }
+            let next = page["next_offset"].as_u64().unwrap();
+            assert!(next > offset, "statistics did not advance past {offset}");
+            offset = next;
+        }
+    }
+
     #[test]
     fn worktree_normalization_and_warm_reads() {
         let root = tempfile::tempdir().unwrap();
@@ -1583,7 +1604,11 @@ mod tests {
         fs::write(root.path().join("stale"), "second\nthird\n").unwrap();
         let params =
             json!({"comparison_id":snapshot["comparison_id"],"generation":snapshot["generation"]});
-        let stats = repo.handle("comparison/stats", &params).unwrap();
+        let stats = all_statistics(
+            &mut repo,
+            &snapshot["comparison_id"],
+            &snapshot["generation"],
+        );
         for (name, _, _, additions, deletions) in files {
             assert_eq!(stats["files"][name]["additions"], *additions, "{name}");
             assert_eq!(stats["files"][name]["deletions"], *deletions, "{name}");
@@ -1604,7 +1629,11 @@ mod tests {
         );
         let refreshed = repo.handle("comparison/refresh", &params).unwrap();
         assert!(repo.handle("comparison/stats", &params).is_err());
-        let stats = repo.handle("comparison/stats", &json!({"comparison_id":refreshed["comparison_id"],"generation":refreshed["generation"]})).unwrap();
+        let stats = all_statistics(
+            &mut repo,
+            &refreshed["comparison_id"],
+            &refreshed["generation"],
+        );
         assert_eq!(
             stats["files"]["stale"],
             json!({"additions":2,"deletions":1})
