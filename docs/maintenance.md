@@ -46,6 +46,8 @@ The [CI workflow](../.github/workflows/ci.yaml) validates four native targets:
 
 CI runs `just check` in the pinned Nix `ci` shell on Linux x86_64 and Apple Silicon alongside the native jobs. Native CI uses Neovim 0.12.5 and Git 2.55.0, reads the Rust version from `distribution.json`, builds an absent ID or reuses a validated complete release, executes the binary, and runs Rust and Neovim tests. Release builds run outside Nix; macOS artifacts must not link Nix-store or Homebrew libraries.
 
+The repository ruleset `main` blocks deletion and force pushes on the default branch and requires both `check` jobs and all four `native` jobs before a pull request can merge, so `gh pr merge --auto --squash` waits for them. Required checks are matched by job name, including the matrix values: after renaming a job or changing a matrix entry, update the ruleset in **Settings → Rules → Rulesets**, or pull requests will wait for a check that never reports.
+
 ```mermaid
 flowchart LR
     identity --> native[Native checks: four targets]
