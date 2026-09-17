@@ -418,8 +418,10 @@ watch: boolean (default true)
     Enable daemon filesystem monitoring and periodic reconciliation. Visible
     worktree, index and attribute-scoped comparisons recover missed events
     using |diffreel-reconcile_ms|.
-    Hidden views do not run periodic Git work. Setting this false does not
-    disable manual refresh or the UI's refresh on FocusGained.
+    Hidden views do not run periodic Git work. Changes to files Git ignores
+    do not start reconciliation. With watch enabled, FocusGained restarts a
+    stopped daemon but does not reconcile; setting this false keeps manual
+    refresh and the UI's refresh on FocusGained.
 
                                                          *diffreel-reconcile_ms*
 reconcile_ms: positive integer (default 30000)

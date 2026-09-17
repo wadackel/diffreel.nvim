@@ -202,6 +202,20 @@ impl Repository {
         stdin: Option<Vec<u8>>,
         literal: bool,
     ) -> Result<Vec<u8>> {
+        let (status, stdout, stderr) = self.git_process(args, reason, stdin, literal)?;
+        if !status.success() {
+            return Err(format!("Git failed: {}", String::from_utf8_lossy(&stderr).trim()).into());
+        }
+        Ok(stdout)
+    }
+
+    fn git_process(
+        &mut self,
+        args: &[String],
+        reason: &str,
+        stdin: Option<Vec<u8>>,
+        literal: bool,
+    ) -> Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>)> {
         if self.stopping.load(Ordering::Relaxed) {
             return Err("Backend is stopping".into());
         }
@@ -295,10 +309,68 @@ impl Repository {
         if self.metrics.jobs.len() > 1000 {
             self.metrics.jobs.remove(0);
         }
-        if !status.success() {
+        Ok((status, stdout, stderr))
+    }
+
+    pub fn ignored(&mut self, paths: &BTreeSet<String>) -> Result<BTreeSet<String>> {
+        let candidates = {
+            let tree = match &self.head {
+                Some(head) => Some(
+                    self.git
+                        .find_object(gix::hash::ObjectId::from_hex(head.as_bytes())?)?
+                        .peel_to_tree()?,
+                ),
+                None => None,
+            };
+            let compared = self
+                .comparisons
+                .values()
+                .flat_map(|comparison| &comparison.entries)
+                .flat_map(|(path, entry)| [Some(path.as_str()), entry.old_path.as_deref()])
+                .flatten()
+                .collect::<BTreeSet<_>>();
+            let mut candidates = Vec::new();
+            'paths: for path in paths {
+                // check-ignore reads its input as pathspecs and rejects literal magic.
+                if !model::safe_path(path)
+                    || path.starts_with(':')
+                    || self.metadata.contains_key(path)
+                    || compared.contains(path.as_str())
+                {
+                    continue;
+                }
+                if let Some(tree) = &tree {
+                    let mut prefix = path.as_str();
+                    loop {
+                        if let Some(entry) = tree.lookup_entry_by_path(prefix)? {
+                            if prefix == path || entry.mode().is_commit() {
+                                continue 'paths;
+                            }
+                        }
+                        match prefix.rsplit_once('/') {
+                            Some((parent, _)) => prefix = parent,
+                            None => break,
+                        }
+                    }
+                }
+                candidates.push(path.clone());
+            }
+            candidates
+        };
+        if candidates.is_empty() {
+            return Ok(BTreeSet::new());
+        }
+        // The index lookup costs one full index scan per path; tracked paths are excluded above.
+        let args = ["check-ignore", "--no-index", "-z", "--stdin"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let input = (candidates.join("\0") + "\0").into_bytes();
+        let (status, stdout, stderr) = self.git_process(&args, "ignore", Some(input), false)?;
+        if !status.success() && status.code() != Some(1) {
             return Err(format!("Git failed: {}", String::from_utf8_lossy(&stderr).trim()).into());
         }
-        Ok(stdout)
+        Ok(model::names(&stdout)?.into_iter().collect())
     }
 
     fn command(&mut self, args: &[&str], reason: &str) -> Result<Vec<u8>> {

@@ -607,7 +607,7 @@ The draft remains available through external deletion, unsupported replacements,
 
 Filesystem events are batched over 100 ms, with a maximum batching wait of 250 ms. Git work and rendering take additional time. Visible worktree, index, and attribute-scoped comparisons also reconcile every 30 seconds by default to recover missed events; this is eventual reconciliation, not a filesystem snapshot taken at a single instant.
 
-Hidden views do not run periodic Git reconciliation. Reopening a stale view reconciles its state; index views also reconcile on redisplay with watching disabled. Fixed revision pairs need worktree monitoring only for attribute pathspec membership. `R` or `:DiffreelRefresh` requests a full refresh; returning focus to Neovim also refreshes visible mutable comparisons.
+Hidden views do not run periodic Git reconciliation. Reopening a stale view reconciles its state; index views also reconcile on redisplay with watching disabled. Fixed revision pairs need worktree monitoring only for attribute pathspec membership. Writes to files Git ignores, such as build output, do not start reconciliation. `R` or `:DiffreelRefresh` requests a full refresh. Returning focus to Neovim refreshes visible mutable comparisons only when `watch` is disabled; with monitoring enabled it only restarts a stopped daemon, so a file selected right after switching back is not delayed by Git work.
 
 If the daemon stops or a Git operation fails, the view reports the error and keeps prior prepared content visible. After correcting the problem, retry that view with `R` or `:DiffreelRefresh`. Other failed views are retried individually. Closing the last healthy view keeps its daemon available for another review; Neovim shutdown stops it.
 

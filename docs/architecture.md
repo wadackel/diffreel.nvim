@@ -38,6 +38,8 @@ Argument-free `:Diffreel` closes a valid diffreel view in the current tab or ope
 
 Keep daemon stdout exclusively for framed RPC; diagnostics go to stderr so they cannot corrupt message boundaries.
 
+The client closes the backend when a request waits 120 seconds. Requests queue behind reconciliation on the repository loop, and one reconciliation runs several Git commands that may each take up to 30 seconds, so a shorter deadline would stop healthy large-repository views. Each loop iteration drains queued requests and filesystem events for up to about 50 ms before running at most one batch, so a backlog becomes one batch instead of one batch per queued event; a request normally waits for the reconciliation already in progress. Responses, PR job output and notifications raised by a request are written before the next queued request is handled.
+
 Protocol 4 exchanges include `initialize`, `comparison/open`, `comparison/list`, `comparison/file`, `comparison/stats`, `blob/read`, `view/update`, `comparison/refresh`, and `comparison/close`. Snapshots carry comparison identity, generation, entries, and update/error state. Notifications include `comparison/updated`, `comparison/progress`, and `repo/changed`; transport failure reaches the UI as `backend/error`. Protocol 4 adds immediate-acknowledgement PR acquisition jobs, completion/error notifications, fixed-snapshot restoration, release and cache cleanup; incompatible custom binaries are rejected.
 
 `comparison/file` accepts a comparison ID and literal relative path, returning endpoint metadata without changing comparison membership. Commit and index endpoints use the comparison's captured state; the worktree side is inspected currently. Retained drafts use it when their path leaves Git's change list. It reads ignored worktree files for disk-state comparison while normal discovery still excludes them. Its responses use the same selection, comparison, session, and view-lifetime guards as blob reads.
@@ -64,9 +66,9 @@ writes. No persistent Git configuration is changed.
 
 `pr/prepare` acknowledges a job ID immediately. The same daemon executable runs
 `--pr-worker` as a separate supervisor process; GitHub/fetch waits do not occupy
-the repository RPC loop or its 30-second request deadline. Results return as
+the repository RPC loop or count against the client's request deadline. Results return as
 `pr/prepared`/`pr/error` notifications with session, view, job and client-request
-identities. A worker's 120-second deadline and control-pipe EOF cancel its process
+identities. The worker's own 120-second deadline and control-pipe EOF cancel its process
 groups. Closing/superseding the view cancels obsolete work and suppresses stale
 publication into the UI; successfully published cache refs remain reusable.
 
@@ -107,9 +109,9 @@ Partial updates are limited to unscoped commit/worktree comparisons and stable r
 
 An intermediate path that has become a file makes its former descendants absent (`ENOTDIR`), just as a missing parent does. Other read errors remain errors. Both watcher classification and full reconciliation preserve this distinction. The explorer can display a path as a file while also listing descendants from the opposite endpoint.
 
-Watchers start before initial discovery and observe the worktree, Git directory, and common Git directory. Events coalesce for 100 ms, with 250 ms as the maximum batching wait; this is not a Git-work or rendering latency bound. Changes during a job remain pending. Metadata/config changes, rescan/error signals, and overflow trigger broader reconciliation.
+Watchers start before initial discovery and observe the worktree, Git directory, and common Git directory. Events coalesce for 100 ms, with 250 ms as the maximum batching wait; this is not a Git-work or rendering latency bound. Changes during a job remain pending. Metadata/config changes, rescan/error signals, and overflow trigger broader reconciliation; once one is queued, later events do not delay it. Before a partial batch, `git check-ignore` drops untracked paths that Git ignores. It runs with `--no-index` because an index-backed query scans the whole index once per path, so paths present in HEAD, status, a comparison, or a HEAD submodule are excluded before the query. A failed query (for example, a path beyond a symlink) keeps every path. A batch left empty clears staleness without Git reconciliation.
 
-`Comparison::mutable()` includes worktree endpoints, either index endpoint, and attribute pathspecs. These visible comparisons reconcile every 30 seconds by default. Hidden comparisons retain stale state and reconcile on redisplay as needed; index comparisons also reconcile on reopen/redisplay with watching disabled. Fixed commit content stays fixed, but attribute pathspec membership depends on current worktree attributes and is re-evaluated. Manual refresh and focus return reconcile mutable views. A missed event can take 30 seconds plus processing to recover. This is eventual reconciliation, not an atomic filesystem snapshot.
+`Comparison::mutable()` includes worktree endpoints, either index endpoint, and attribute pathspecs. These visible comparisons reconcile every 30 seconds by default. Hidden comparisons retain stale state and reconcile on redisplay as needed; a view update for an already-visible comparison does not start reconciliation, since its pending batch and the timer cover it; index comparisons also reconcile on reopen/redisplay with watching disabled. Fixed commit content stays fixed, but attribute pathspec membership depends on current worktree attributes and is re-evaluated. Manual refresh reconciles mutable views. Focus return reconciles them only when monitoring is disabled, or restarts a stopped backend; with monitoring enabled it would make the next selection wait for Git. A missed event can take 30 seconds plus processing to recover. This is eventual reconciliation, not an atomic filesystem snapshot.
 
 Pinned file comparisons include a validated literal file in their comparison
 identity. They bypass change-list membership, configured scopes and ignore

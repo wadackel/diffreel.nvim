@@ -73,7 +73,7 @@ function Backend:request(method, params, done)
   end
   self.pending[id] = finish
   timer:start(
-    30000,
+    120000,
     0,
     vim.schedule_wrap(function()
       finish("Daemon request timed out: " .. method)

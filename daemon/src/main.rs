@@ -114,7 +114,12 @@ impl Pending {
         }
         repo.invalidate();
         let first = *self.first.get_or_insert(at);
-        self.due = Some((at + Duration::from_millis(100)).min(first + Duration::from_millis(250)));
+        let due = (at + Duration::from_millis(100)).min(first + Duration::from_millis(250));
+        // Once a batch requires full reconciliation, later events must not push its deadline back.
+        self.due = Some(match self.due {
+            Some(existing) if self.full => existing.min(due),
+            _ => due,
+        });
     }
 
     fn full(&mut self, reason: &str) {
@@ -174,6 +179,58 @@ fn partial_paths(
     Ok(Some(paths))
 }
 
+fn reconcilable(repo: &mut Repository, changed: &BTreeSet<String>) -> BTreeSet<String> {
+    // check-ignore aborts the whole batch for paths beyond a symlink, so failures keep every path.
+    match repo.ignored(changed) {
+        Ok(ignored) => changed.difference(&ignored).cloned().collect(),
+        Err(_) => changed.clone(),
+    }
+}
+
+fn reopened(
+    repo: &Repository,
+    method: &str,
+    visible_before: &BTreeSet<String>,
+    interval: Duration,
+) -> bool {
+    // A view update for an already-visible comparison is covered by its pending batch and the
+    // periodic timer. An open returns `updating` to a new view, which an ignored-only batch
+    // would never clear.
+    repo.visible().iter().any(|id| {
+        let comparison = &repo.comparisons[id];
+        (method == "comparison/open" || !visible_before.contains(id))
+            && (comparison.stale || comparison.checked_at.elapsed() >= interval)
+    })
+}
+
+fn write_pr_events(
+    output: &mut impl std::io::Write,
+    repo: &mut Repository,
+    pr_jobs: &mut pr::Jobs,
+) -> Result<()> {
+    for (method, params) in pr_jobs.poll() {
+        if method == "pr/prepared" {
+            repo.git = gix::discover(&repo.root)?;
+            repo.git.object_cache_size(Some(67108864));
+        }
+        rpc::write_message(
+            output,
+            &json!({"jsonrpc":"2.0","method":method,"params":params}),
+        )?;
+    }
+    Ok(())
+}
+
+fn write_notifications(output: &mut impl std::io::Write, repo: &mut Repository) -> Result<()> {
+    for (method, params) in repo.notifications.drain(..) {
+        rpc::write_message(
+            output,
+            &json!({"jsonrpc":"2.0","method":method,"params":params}),
+        )?;
+    }
+    Ok(())
+}
+
 fn serve(root: &Path, watch: bool, interval: Duration, max_bytes: usize) -> Result<()> {
     let mut repo = Repository::new(root, max_bytes)?;
     let mut pr_jobs = pr::Jobs::new(&repo.root, &repo.common_dir, &repo.session_id);
@@ -225,7 +282,7 @@ fn serve(root: &Path, watch: bool, interval: Duration, max_bytes: usize) -> Resu
     let mut output = BufWriter::new(std::io::stdout());
     let mut pending = Pending::default();
     let mut periodic: Option<Instant> = None;
-    loop {
+    'serve: loop {
         if STOP.load(Ordering::Relaxed) || repo.stopping.load(Ordering::Relaxed) {
             break;
         }
@@ -242,77 +299,84 @@ fn serve(root: &Path, watch: bool, interval: Duration, max_bytes: usize) -> Resu
             due.saturating_duration_since(Instant::now())
                 .min(Duration::from_millis(50))
         });
-        match receiver.recv_timeout(timeout) {
-            Ok(Message::Rpc(value)) => {
-                let id = value.get("id").cloned();
-                let method = value.get("method").and_then(Value::as_str).unwrap_or("");
-                let params = value.get("params").cloned().unwrap_or(json!({}));
-                let result = if method.starts_with("pr/") && !repo.initialized {
-                    Err("Backend is not initialized".into())
-                } else if value.get("jsonrpc") == Some(&json!("2.0")) {
-                    match method {
-                        "pr/prepare" => pr_jobs.start(&params),
-                        "pr/cancel" => pr_jobs.cancel(&params),
-                        "pr/restore" => pr_jobs.restore(&params).and_then(|_| {
-                            repo.git = gix::discover(&repo.root)?;
-                            repo.git.object_cache_size(Some(67108864));
-                            let mut comparison = json!({
-                                "view_id":params["view_id"], "left":params["snapshot"]["merge_base"],
-                                "right":params["snapshot"]["head"], "untracked":false,
-                            });
-                            for name in ["paths", "file"] {
-                                if let Some(value) = params["comparison"].get(name) {
-                                    comparison[name] = value.clone();
+        let mut message = match receiver.recv_timeout(timeout) {
+            Ok(message) => Some(message),
+            Err(mpsc::RecvTimeoutError::Timeout) => None,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        };
+        // Handling one message per iteration turns a backlog of old events into one due batch each.
+        let drain_started = Instant::now();
+        while let Some(current) = message.take() {
+            match current {
+                Message::Rpc(value) => {
+                    let id = value.get("id").cloned();
+                    let method = value.get("method").and_then(Value::as_str).unwrap_or("");
+                    let params = value.get("params").cloned().unwrap_or(json!({}));
+                    let visible_before = repo.visible();
+                    let result = if method.starts_with("pr/") && !repo.initialized {
+                        Err("Backend is not initialized".into())
+                    } else if value.get("jsonrpc") == Some(&json!("2.0")) {
+                        match method {
+                            "pr/prepare" => pr_jobs.start(&params),
+                            "pr/cancel" => pr_jobs.cancel(&params),
+                            "pr/restore" => pr_jobs.restore(&params).and_then(|_| {
+                                repo.git = gix::discover(&repo.root)?;
+                                repo.git.object_cache_size(Some(67108864));
+                                let mut comparison = json!({
+                                    "view_id":params["view_id"], "left":params["snapshot"]["merge_base"],
+                                    "right":params["snapshot"]["head"], "untracked":false,
+                                });
+                                for name in ["paths", "file"] {
+                                    if let Some(value) = params["comparison"].get(name) {
+                                        comparison[name] = value.clone();
+                                    }
                                 }
+                                repo.handle("comparison/open", &comparison)
+                            }),
+                            "pr/cache-clear" => pr_jobs.clear(),
+                            "pr/release" => {
+                                pr_jobs.release(params["view_id"].as_str().unwrap_or(""));
+                                Ok(json!({}))
                             }
-                            repo.handle("comparison/open", &comparison)
-                        }),
-                        "pr/cache-clear" => pr_jobs.clear(),
-                        "pr/release" => {
-                            pr_jobs.release(params["view_id"].as_str().unwrap_or(""));
-                            Ok(json!({}))
+                            "comparison/close" => {
+                                pr_jobs.release(params["view_id"].as_str().unwrap_or(""));
+                                repo.handle(method, &params)
+                            }
+                            _ => repo.handle(method, &params),
                         }
-                        "comparison/close" => {
-                            pr_jobs.release(params["view_id"].as_str().unwrap_or(""));
-                            repo.handle(method, &params)
-                        }
-                        _ => repo.handle(method, &params),
-                    }
-                } else {
-                    Err("Invalid JSON-RPC request".into())
-                };
-                if let Some(id) = id {
-                    let response = match result {
-                        Ok(result) => json!({"jsonrpc":"2.0","id":id,"result":result}),
-                        Err(error) => {
-                            json!({"jsonrpc":"2.0","id":id,"error":{"code":-32000,"message":error.to_string()}})
-                        }
+                    } else {
+                        Err("Invalid JSON-RPC request".into())
                     };
-                    rpc::write_message(&mut output, &response)?;
-                }
-                if watch && matches!(method, "view/update" | "comparison/open") {
-                    for id in repo.visible() {
-                        let comparison = &repo.comparisons[&id];
-                        if comparison.stale || comparison.checked_at.elapsed() >= interval {
-                            pending.full("reopen");
-                        }
+                    if let Some(id) = id {
+                        let response = match result {
+                            Ok(result) => json!({"jsonrpc":"2.0","id":id,"result":result}),
+                            Err(error) => {
+                                json!({"jsonrpc":"2.0","id":id,"error":{"code":-32000,"message":error.to_string()}})
+                            }
+                        };
+                        rpc::write_message(&mut output, &response)?;
                     }
+                    if watch
+                        && matches!(method, "view/update" | "comparison/open")
+                        && reopened(&repo, method, &visible_before, interval)
+                    {
+                        pending.full("reopen");
+                    }
+                    write_pr_events(&mut output, &mut repo, &mut pr_jobs)?;
+                    write_notifications(&mut output, &mut repo)?;
                 }
+                Message::Event(event, at) => pending.event(&mut repo, event, at),
+                Message::End => break 'serve,
             }
-            Ok(Message::Event(event, at)) => pending.event(&mut repo, event, at),
-            Ok(Message::End) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-        }
-        for (method, params) in pr_jobs.poll() {
-            if method == "pr/prepared" {
-                repo.git = gix::discover(&repo.root)?;
-                repo.git.object_cache_size(Some(67108864));
+            if STOP.load(Ordering::Relaxed)
+                || repo.stopping.load(Ordering::Relaxed)
+                || drain_started.elapsed() >= Duration::from_millis(50)
+            {
+                break;
             }
-            rpc::write_message(
-                &mut output,
-                &json!({"jsonrpc":"2.0","method":method,"params":params}),
-            )?;
+            message = receiver.try_recv().ok();
         }
+        write_pr_events(&mut output, &mut repo, &mut pr_jobs)?;
         let visible = repo.visible();
         if !watch || visible.is_empty() {
             periodic = None;
@@ -327,12 +391,24 @@ fn serve(root: &Path, watch: bool, interval: Duration, max_bytes: usize) -> Resu
             }
             if pending.due.is_some_and(|due| due <= Instant::now()) {
                 let work = std::mem::take(&mut pending);
+                let changed = if work.full {
+                    BTreeSet::new()
+                } else {
+                    reconcilable(&mut repo, &work.paths)
+                };
                 for id in visible {
                     let result = (|| -> Result<()> {
+                        if !work.full && changed.is_empty() {
+                            repo.comparisons
+                                .get_mut(&id)
+                                .ok_or("Unknown comparison")?
+                                .stale = false;
+                            return Ok(());
+                        }
                         let paths = if work.full {
                             None
                         } else {
-                            partial_paths(&repo, &id, &work.paths)?
+                            partial_paths(&repo, &id, &changed)?
                         };
                         if paths.as_ref().is_some_and(Vec::is_empty) {
                             let c = repo.comparisons.get_mut(&id).ok_or("Unknown comparison")?;
@@ -369,12 +445,7 @@ fn serve(root: &Path, watch: bool, interval: Duration, max_bytes: usize) -> Resu
                 }
             }
         }
-        for (method, params) in repo.notifications.drain(..) {
-            rpc::write_message(
-                &mut output,
-                &json!({"jsonrpc":"2.0","method":method,"params":params}),
-            )?;
-        }
+        write_notifications(&mut output, &mut repo)?;
     }
     drop(watcher.take());
     Ok(())
@@ -473,5 +544,221 @@ mod tests {
             &BTreeSet::from(["src/file.txt".into()]),
         );
         assert!(matches!(paths, Ok(None)), "{paths:?}");
+    }
+
+    fn git(root: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=Example",
+                "-c",
+                "user.email=example@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
+            .args(args)
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    fn paths(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|name| (*name).into()).collect()
+    }
+
+    #[test]
+    fn ignored_events_do_not_require_reconciliation() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        git(root, &["init", "-q"]);
+        std::fs::write(root.join(".gitignore"), "build/\n*.log\n").unwrap();
+        std::fs::create_dir_all(root.join("build/tracked")).unwrap();
+        std::fs::write(root.join("build/tracked/keep.txt"), "tracked\n").unwrap();
+        std::fs::write(root.join("kept.log"), "tracked\n").unwrap();
+        std::fs::write(root.join("edited.log"), "tracked\n").unwrap();
+        git(root, &["add", ".gitignore"]);
+        git(
+            root,
+            &[
+                "add",
+                "-f",
+                "build/tracked/keep.txt",
+                "kept.log",
+                "edited.log",
+            ],
+        );
+        git(root, &["commit", "-qm", "baseline"]);
+        std::fs::write(root.join("build/out.o"), "object\n").unwrap();
+        std::fs::write(root.join("debug.log"), "log\n").unwrap();
+        std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+        std::fs::write(root.join("edited.log"), "changed\n").unwrap();
+        let mut repo = Repository::new(root, 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        repo.handle("comparison/open", &json!({"view_id":"one"}))
+            .unwrap();
+        std::fs::write(root.join(":foo.log"), "after status\n").unwrap();
+        let changed = paths(&[
+            ":foo.log",
+            "build/out.o",
+            "debug.log",
+            "new.txt",
+            "build",
+            "build/tracked",
+            "build/tracked/keep.txt",
+            "kept.log",
+            "edited.log",
+        ]);
+        assert_eq!(
+            reconcilable(&mut repo, &changed),
+            paths(&[
+                ":foo.log",
+                "new.txt",
+                "build",
+                "build/tracked",
+                "build/tracked/keep.txt",
+                "kept.log",
+                "edited.log",
+            ])
+        );
+    }
+
+    #[test]
+    fn ignored_query_keeps_pinned_and_submodule_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let module = tempfile::tempdir().unwrap();
+        git(module.path(), &["init", "-q"]);
+        std::fs::write(module.path().join("file.txt"), "module\n").unwrap();
+        git(module.path(), &["add", "."]);
+        git(module.path(), &["commit", "-qm", "module"]);
+        let root = root.path();
+        git(root, &["init", "-q"]);
+        std::fs::write(root.join(".gitignore"), "*.o\n").unwrap();
+        git(root, &["add", "."]);
+        git(
+            root,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "-q",
+                module.path().to_str().unwrap(),
+                "module",
+            ],
+        );
+        git(root, &["commit", "-qm", "baseline"]);
+        std::fs::write(root.join("module/out.o"), "object\n").unwrap();
+        std::fs::write(root.join("pinned.o"), "object\n").unwrap();
+        let mut repo = Repository::new(root, 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        repo.handle(
+            "comparison/open",
+            &json!({"view_id":"one","file":"pinned.o"}),
+        )
+        .unwrap();
+        let changed = paths(&["module/out.o", "pinned.o"]);
+        assert_eq!(reconcilable(&mut repo, &changed), changed);
+    }
+
+    #[test]
+    fn view_updates_reopen_only_newly_visible_stale_comparisons() {
+        let root = tempfile::tempdir().unwrap();
+        git(root.path(), &["init", "-q"]);
+        std::fs::write(root.path().join("file.txt"), "changed\n").unwrap();
+        let mut repo = Repository::new(root.path(), 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        let snapshot = repo
+            .handle(
+                "comparison/open",
+                &json!({"view_id":"one","untracked":true}),
+            )
+            .unwrap();
+        let id = snapshot["comparison_id"].as_str().unwrap();
+        let interval = Duration::from_secs(30);
+        let visible = repo.visible();
+        assert!(visible.contains(id));
+        assert!(!reopened(&repo, "view/update", &visible, interval));
+        assert!(!reopened(&repo, "comparison/open", &visible, interval));
+        repo.invalidate();
+        assert!(!reopened(&repo, "view/update", &visible, interval));
+        assert!(reopened(&repo, "comparison/open", &visible, interval));
+        assert!(reopened(&repo, "view/update", &BTreeSet::new(), interval));
+        repo.handle(
+            "view/update",
+            &json!({"view_id":"one","comparison_id":id,"visible":false}),
+        )
+        .unwrap();
+        let hidden = repo.visible();
+        repo.handle(
+            "view/update",
+            &json!({"view_id":"one","comparison_id":id,"visible":true}),
+        )
+        .unwrap();
+        assert!(reopened(&repo, "view/update", &hidden, interval));
+    }
+
+    #[test]
+    fn events_extend_batches_but_never_delay_a_queued_full_reconciliation() {
+        let root = tempfile::tempdir().unwrap();
+        git(root.path(), &["init", "-q"]);
+        let mut repo = Repository::new(root.path(), 1048576).unwrap();
+        let file = repo.root.join("file.txt");
+        let event = || {
+            Ok(
+                notify::Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Any))
+                    .add_path(file.clone()),
+            )
+        };
+        let start = Instant::now();
+        let mut pending = Pending::default();
+        pending.event(&mut repo, event(), start);
+        assert_eq!(pending.due, Some(start + Duration::from_millis(100)));
+        pending.event(&mut repo, event(), start + Duration::from_millis(80));
+        assert_eq!(pending.due, Some(start + Duration::from_millis(180)));
+        pending.event(&mut repo, event(), start + Duration::from_millis(200));
+        assert_eq!(pending.due, Some(start + Duration::from_millis(250)));
+        let mut pending = Pending::default();
+        pending.full("reopen");
+        let due = pending.due.unwrap();
+        pending.event(&mut repo, event(), Instant::now());
+        assert_eq!(pending.due, Some(due));
+        let index = repo.git_dir.join("index");
+        let mut pending = Pending::default();
+        pending.event(&mut repo, event(), start);
+        pending.event(
+            &mut repo,
+            Ok(
+                notify::Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Any))
+                    .add_path(index),
+            ),
+            start + Duration::from_millis(90),
+        );
+        assert!(pending.full);
+        assert_eq!(pending.due, Some(start + Duration::from_millis(100)));
+    }
+
+    #[test]
+    fn failed_ignore_query_keeps_every_path() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        git(root, &["init", "-q"]);
+        std::fs::write(root.join(".gitignore"), "*.o\n").unwrap();
+        std::fs::create_dir(root.join("real")).unwrap();
+        std::os::unix::fs::symlink("real", root.join("link")).unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-qm", "baseline"]);
+        std::fs::write(root.join("real/out.o"), "object\n").unwrap();
+        let mut repo = Repository::new(root, 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        repo.handle("comparison/open", &json!({"view_id":"one"}))
+            .unwrap();
+        let changed = paths(&["link/out.o", "real/out.o"]);
+        assert!(repo.ignored(&changed).is_err());
+        assert_eq!(reconcilable(&mut repo, &changed), changed);
+        let id = repo.comparisons.keys().next().unwrap().clone();
+        assert!(repo.comparisons[&id].error.is_none());
     }
 }

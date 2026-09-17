@@ -8,6 +8,11 @@ local scenarios = {
   "retained-navigation",
   "retained-refresh",
   "retained-restart",
+  "switching-selection",
+  "switching-missing",
+  "focus-watch",
+  "focus-nowatch",
+  "focus-closed",
 }
 for _, scenario in ipairs(scenarios) do
   local root = vim.fn.tempname()
@@ -44,7 +49,7 @@ for _, scenario in ipairs(scenarios) do
     write("main.lua", "return 2\n")
     write("other.lua", "return 20\n")
     plugin = require("diffreel")
-    plugin.setup({ backend = "rust", watch = false })
+    plugin.setup({ backend = "rust", watch = scenario == "focus-watch" or scenario == "focus-closed" })
     view = plugin.open({ root = root })
     assert(vim.wait(5000, function()
       return view.ready
@@ -77,6 +82,70 @@ for _, scenario in ipairs(scenarios) do
       end, 5)
       assert(vim.bo[target].modified, "Scheduled reload discarded the destination draft")
       assert(vim.api.nvim_buf_get_lines(target, 0, 1, false)[1] == "return 'unsaved'")
+    elseif scenario == "switching-selection" or scenario == "switching-missing" then
+      local selected = scenario == "switching-selection" and "other.lua" or "main.lua"
+      if scenario == "switching-missing" then
+        plugin.select(view, "other.lua")
+        assert(vim.wait(5000, function()
+          return view.ready and view.selected_path == "other.lua"
+        end, 5))
+        git({ "add", "main.lua" })
+      else
+        write("added.lua", "return 'added'\n")
+        git({ "add", "added.lua" })
+      end
+      git({ "commit", "-qm", "move HEAD" })
+      local backend, held = view.manager.backend, nil
+      local request = backend.request
+      backend.request = function(self, method, params, done)
+        if method == "comparison/open" then
+          request(self, method, params, function(failure, result)
+            held = function()
+              done(failure, result)
+            end
+          end)
+        else
+          request(self, method, params, done)
+        end
+      end
+      plugin.refresh(view)
+      assert(vim.wait(5000, function()
+        return held ~= nil
+      end, 5))
+      backend.request = request
+      assert(view.switching)
+      plugin.select(view, selected)
+      held()
+      assert(vim.wait(5000, function()
+        return view.ready and not view.switching and not view.selection_pending
+      end, 5))
+      assert(view.selected_path == "other.lua", "Selection during switching: " .. tostring(view.selected_path))
+      assert(vim.fs.basename(vim.api.nvim_buf_get_name(view.right_buf)) == "other.lua")
+      assert(view.deferred_path == nil)
+    elseif scenario == "focus-watch" or scenario == "focus-nowatch" then
+      local backend, methods = view.manager.backend, {}
+      local request = backend.request
+      backend.request = function(self, method, params, done)
+        methods[#methods + 1] = method
+        request(self, method, params, done)
+      end
+      vim.api.nvim_exec_autocmds("FocusGained", {})
+      vim.wait(200, function()
+        return false
+      end, 5)
+      backend.request = request
+      local expected = scenario == "focus-watch" and { "view/update" } or { "comparison/refresh" }
+      assert(vim.deep_equal(methods, expected), "FocusGained requests: " .. vim.inspect(methods))
+    elseif scenario == "focus-closed" then
+      local manager = view.manager
+      manager.backend:close()
+      vim.api.nvim_exec_autocmds("FocusGained", {})
+      assert(
+        vim.wait(5000, function()
+          return view.manager ~= manager and view.ready and not view.updating
+        end, 5),
+        "FocusGained did not restart a closed backend"
+      )
     else
       local source, manager = view.right_buf, view.manager
       vim.api.nvim_buf_set_lines(source, 0, -1, false, { "return 'draft'" })
