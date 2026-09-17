@@ -2,6 +2,10 @@
 
 Review a changing Git worktree without leaving your editing environment.
 
+[![CI](https://github.com/wadackel/diffreel.nvim/actions/workflows/ci.yaml/badge.svg)](https://github.com/wadackel/diffreel.nvim/actions/workflows/ci.yaml)
+![Neovim](https://img.shields.io/badge/Neovim-%3E%3D0.12-green?logo=neovim&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 diffreel pairs a file explorer with Neovim's native diff. The working-tree pane is a normal file buffer: keep editing, use your configured LSP, and follow changes made by other tools. Unsaved edits stay in your buffer when the file changes on disk.
 
 ![diffreel reviewing Lua changes with a file explorer, a committed revision on the left, and an unsaved working-tree buffer on the right](docs/assets/review.png)
