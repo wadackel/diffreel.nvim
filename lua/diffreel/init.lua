@@ -13,6 +13,7 @@ local line_stats = require("diffreel.line_stats")
 local panel = require("diffreel.panel")
 local popup = require("diffreel.popup")
 local full_name = require("diffreel.full_name")
+local status = require("diffreel.status")
 local hunks = require("diffreel.hunks")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
@@ -176,6 +177,7 @@ end
 
 local function render(view, cursor_path, frame_only)
   if not valid(view) or not vim.api.nvim_buf_is_valid(view.explorer_buf) then
+    status.update(view, {})
     return
   end
   if view.error or not view.ready then
@@ -189,6 +191,7 @@ local function render(view, cursor_path, frame_only)
     )
   end
   if not panel.visible(view) or view.layout_changing then
+    status.update(view, {})
     return
   end
   local position = vim.api.nvim_win_call(view.explorer_win, vim.fn.winsaveview)
@@ -232,19 +235,26 @@ local function render(view, cursor_path, frame_only)
   for _, row in ipairs(rows) do
     lines[#lines + 1] = row.text
   end
-  local details, footer_rows = {}, {}
-  local function append(text, group, id, icon)
+  local details, footer_rows, status_parts = {}, {}, {}
+  local function compose(text, icon)
     -- Overlaying the frame as a separate extmark would land it on the continuation lines
     -- ui.wrap produces, so the frame replaces the icon in the slot ui.label already reserves.
     local glyph = icon == "loading" and not view.error and spinner.frame() or nil
-    local label = icon and (glyph and ui.prefix(glyph, text) or ui.label(view.ui_icons, icon, text)) or text
-    for _, part in ipairs(ui.wrap(label, width)) do
+    return icon and (glyph and ui.prefix(glyph, text) or ui.label(view.ui_icons, icon, text)) or text
+  end
+  local function append(text, group, id, icon)
+    for _, part in ipairs(ui.wrap(compose(text, icon), width)) do
       lines[#lines + 1] = part.text
       part.id = id or group
       footer_rows[#lines] = part
       if group then
         details[#details + 1] = { row = #lines - 1, group = "DiffreelExplorer" .. group }
       end
+    end
+  end
+  local function pin(text, group, icon)
+    for _, part in ipairs(ui.wrap(compose(text, icon), width)) do
+      status_parts[#status_parts + 1] = { text = part.text, group = group and "DiffreelExplorer" .. group or nil }
     end
   end
   if #rows == 0 then
@@ -285,10 +295,10 @@ local function render(view, cursor_path, frame_only)
         end
       end
       if stats.pending then
-        append("Counting saved lines…", "StatsPending", "stats_pending", "loading")
+        pin("Counting saved lines…", "StatsPending", "loading")
       end
     else
-      append("Counting saved lines…", "StatsPending", "stats_pending", "loading")
+      pin("Counting saved lines…", "StatsPending", "loading")
     end
   end
   if selected and selected.git and selected.git.submodule_state then
@@ -317,15 +327,29 @@ local function render(view, cursor_path, frame_only)
     end
   end
   if view.error then
-    append("Update stopped: " .. explorer.display(view.error), "Error", "error", "error")
-    append("R: retry", "Error", "retry")
+    pin("Update stopped: " .. explorer.display(view.error), "Error", "error")
+    pin("R: retry", "Error")
   elseif view.disk_conflict then
     append("Unsaved buffer differs from disk", "Conflict", "conflict", "warning")
   elseif view.navigation then
-    append("Paused", "Paused", "paused", "paused")
-    append("Return to source or select a file", "Paused", "paused_hint")
+    pin("Paused", "Paused", "paused")
+    pin("Return to source or select a file", "Paused")
   elseif view.updating then
-    append("Updating…", "Loading", "updating", "loading")
+    pin("Updating…", "Loading", "loading")
+  end
+  if #status_parts > status.capacity(view.explorer_win) then
+    -- Splitting the block would leave the remainder both invisible and unreachable by scrolling.
+    for _, part in ipairs(status_parts) do
+      lines[#lines + 1] = part.text
+      if part.group then
+        details[#details + 1] = { row = #lines - 1, group = part.group }
+      end
+    end
+    status_parts = {}
+  end
+  local content = #lines
+  for _ = 1, #status_parts do
+    lines[#lines + 1] = ""
   end
   local rendered = view.explorer_render
   if
@@ -370,6 +394,7 @@ local function render(view, cursor_path, frame_only)
       tick = vim.api.nvim_buf_get_changedtick(view.explorer_buf),
     }
   end
+  status.update(view, status_parts)
   view.footer_rows = footer_rows
   if frame_only then
     return
@@ -378,7 +403,7 @@ local function render(view, cursor_path, frame_only)
   local target = explorer.cursor_path(rows, explicit or (old and old.path) or view.selected_path)
   if not explicit and footer_anchor then
     local row, col = ui.locate(footer_rows, footer_anchor)
-    row = row or math.min(#lines, math.max(#rows + 4, position.lnum + #rows - #old_rows))
+    row = row or math.min(content, math.max(#rows + 4, position.lnum + #rows - #old_rows))
     position.topline = math.max(1, position.topline + row - position.lnum)
     position.lnum, position.col = row, col or position.col
     vim.api.nvim_win_call(view.explorer_win, function()
@@ -388,7 +413,7 @@ local function render(view, cursor_path, frame_only)
     if position.lnum > 3 then
       position.lnum = position.lnum + #rows - #old_rows
     end
-    position.lnum = math.min(#lines, math.max(1, position.lnum))
+    position.lnum = math.min(content, math.max(1, position.lnum))
     vim.api.nvim_win_call(view.explorer_win, function()
       vim.fn.winrestview(position)
     end)
@@ -1526,6 +1551,7 @@ local function apply_explorer(view, next_options, settings, automatic)
   local width = panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win)
   local height = panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win)
   full_name.close(view)
+  status.update(view, {})
   if not automatic then
     popup.close(view, "path_popup")
     help.close(view)
@@ -2129,6 +2155,9 @@ local function dispose(view)
     full_name.dispose(view)
   end)
   cleanup(function()
+    status.dispose(view)
+  end)
+  cleanup(function()
     help.close(view)
   end)
   cleanup(function()
@@ -2396,7 +2425,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "CursorMoved", "WinEnter", "BufWinEnter", "WinScrolled", "WinResized" }, {
     group = group,
     callback = function(event)
-      if full_name.owns(tonumber(event.match)) then
+      if full_name.owns(tonumber(event.match)) or status.owns(tonumber(event.match)) then
         return
       end
       for _, view in pairs(M.views) do
@@ -2429,10 +2458,12 @@ function M.setup(opts)
       "winbar",
     },
     callback = function()
-      if full_name.owns(vim.api.nvim_get_current_win()) then
+      local current = vim.api.nvim_get_current_win()
+      if full_name.owns(current) or status.owns(current) then
         return
       end
       for _, view in pairs(M.views) do
+        status.reposition(view)
         full_name.update(view)
       end
     end,
@@ -2585,7 +2616,9 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "TabEnter", "TabClosed", "WinClosed", "BufWinEnter" }, {
     group = group,
     callback = function(event)
-      if event.event == "WinClosed" and full_name.owns(tonumber(event.match)) then
+      if
+        event.event == "WinClosed" and (full_name.owns(tonumber(event.match)) or status.owns(tonumber(event.match)))
+      then
         return
       end
       vim.schedule(function()
@@ -2595,6 +2628,9 @@ function M.setup(opts)
         for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
           if event.event == "TabEnter" then
             resize_view(view)
+            if valid(view) then
+              status.reposition(view)
+            end
           end
           if not valid(view) then
             dispose(view)
