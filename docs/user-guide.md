@@ -325,7 +325,7 @@ Headers use icons to identify repositories, commits, the index, the worktree and
 
 Folders use different icons when open and closed, including rows that represent a compared file with descendants. Status messages pair icons with text: warnings and error causes remain explicit and wrap to the explorer's width, with a two-space continuation indent where space permits.
 
-`Updating…`, `Counting saved lines…`, `Paused` and `Update stopped` are pinned to the bottom of the explorer pane, so they stay visible no matter how many files changed or how far the tree is scrolled. The cursor never enters them, and the rows they cover are kept blank so no file row or message is hidden behind them. If they would need more than half the pane, the whole block is written into the buffer instead, where it scrolls with the tree and holds no cursor of its own. `Saved lines`, `Unsaved buffer differs from disk` and the selected file's details stay in the buffer below the tree and scroll with it. When one of those reflows, the cursor stays in the same message at the same text position; if that message disappears, the cursor stays within the remaining footer.
+The review's own state appears at the right end of the winbar of the pane at the top-right of its tabpage, in a status color: `Updating…` while the file list is refreshed, `Counting saved lines…` while line counts are pending, `Paused` while you are away from the source buffer, and `R: retry` once updates have stopped. It follows the pane, not the explorer, so it stays visible when the explorer is hidden or placed elsewhere. While a file is still loading, its pane's `Loading` header stands in for it. `Update stopped` with its cause, and the way back from `Paused`, are written below the tree. `Saved lines`, `Unsaved buffer differs from disk` and the selected file's details stay in the buffer below the tree and scroll with it. When one of those reflows, the cursor stays in the same message at the same text position; if that message disappears, the cursor stays within the remaining footer.
 
 `setup({ ui_icons = { … } })` accepts individual overrides:
 
@@ -372,7 +372,7 @@ The key-list popup displays readable action labels such as `Next file` and `Copy
 
 ### Spinner
 
-The loading symbol animates while a review is waiting. The diff window's `Loading` winbar, the explorer's `Loading…` row and the pinned `Updating…` and `Counting saved lines…` rows take the place of `ui_icons.loading` with a spinner frame, so a waiting row keeps one indicator rather than gaining a second one. A single timer supplies the frame number to every label in every review, so labels that appear together always show the same frame.
+The loading symbol animates while a review is waiting. The diff window's `Loading` winbar, the explorer's `Loading…` row and the `Updating…` and `Counting saved lines…` winbar labels take the place of `ui_icons.loading` with a spinner frame, so a waiting row keeps one indicator rather than gaining a second one. A single timer supplies the frame number to every label in every review, so labels that appear together always show the same frame.
 
 ```lua
 require("diffreel").setup({

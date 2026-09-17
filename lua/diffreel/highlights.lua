@@ -88,6 +88,9 @@ function M.defaults()
     ExplorerError = "DiagnosticError",
     ExplorerConflict = "DiffreelModified",
     ExplorerPaused = "DiffreelModified",
+    Activity = "DiagnosticInfo",
+    ActivityPaused = "DiagnosticWarn",
+    ActivityError = "DiagnosticError",
     HelpKey = "Special",
     HelpHint = "DiffreelDim",
   }

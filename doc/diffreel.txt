@@ -655,12 +655,13 @@ ui_icons: table (setup() only)
     to the explorer width; continuation lines indent by two spaces where
     space permits.
 
-    "Updating…", "Counting saved lines…", "Paused" and "Update stopped" are
-    pinned to the bottom of the explorer pane and stay visible however long
-    the tree is. The cursor never enters them, and the rows they cover are
-    kept blank so no file row or message is hidden behind them. If they would
-    need more than half the pane, the whole block is written into the buffer
-    instead, where it scrolls with the tree and holds no cursor of its own.
+    The review's own state appears at the right end of the winbar of the
+    pane at the top-right of its tabpage, in a status color:
+    "Updating…", "Counting saved lines…", "Paused", or "R: retry" once
+    updates have stopped. It follows the pane rather than the explorer, so
+    hiding or moving the explorer keeps it visible. While a file is loading,
+    that pane's "Loading" header stands in for it. "Update stopped" with its
+    cause, and the way back from "Paused", are written below the tree.
     "Saved lines", "Unsaved buffer differs from disk" and the selected file's
     details stay in the buffer and scroll with the tree. Reflow preserves the
     cursor's message and text position; removing that message keeps the
@@ -671,8 +672,8 @@ spinner: table or false (setup() only)
     Animation for the loading symbol. While a review is waiting, the symbol
     ui_icons.loading marks is replaced frame by frame, so the waiting rows
     keep one indicator rather than gaining a second one. The diff window's
-    "Loading" winbar, the explorer's "Loading…" row and the pinned
-    "Updating…" and "Counting saved lines…" rows all read the same frame from
+    "Loading" winbar, the explorer's "Loading…" row and the "Updating…" and
+    "Counting saved lines…" winbar labels all read the same frame from
     one timer, so labels that appear together never drift apart.
 
     frames:   array of strings (default the ten Braille frames above)
@@ -908,6 +909,9 @@ PUBLIC GROUPS                                     *diffreel-highlight-groups*
     Line/text groups are shared across split, stacked and inline diff layouts.
 
     Group                                      Default
+    DiffreelActivity                           DiagnosticInfo
+    DiffreelActivityError                      DiagnosticError
+    DiffreelActivityPaused                     DiagnosticWarn
     DiffreelAdded                              DiagnosticOk
     DiffreelDeleted                            DiagnosticError
     DiffreelDiffCursorLineNr                   CursorLineNr
