@@ -13,7 +13,6 @@ local line_stats = require("diffreel.line_stats")
 local panel = require("diffreel.panel")
 local popup = require("diffreel.popup")
 local full_name = require("diffreel.full_name")
-local status = require("diffreel.status")
 local hunks = require("diffreel.hunks")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
@@ -175,23 +174,95 @@ local function header_path(path)
     .. "%*"
 end
 
+local function activity(view)
+  if view.error then
+    return "Error", "R: retry"
+  elseif view.navigation then
+    return "Paused", ui.label(view.ui_icons, "paused", "Paused")
+  elseif not view.ready then
+    -- The pane's own Loading header already spins; a second indicator would only repeat it.
+    return
+  end
+  local group, text
+  if view.updating then
+    group, text = "", "Updating…"
+  elseif view.line_stats then
+    local stats = line_stats.current(view)
+    if not stats or stats.pending then
+      group, text = "", "Counting saved lines…"
+    end
+  end
+  if text then
+    return group, ui.prefix(spinner.frame() or ui.icon(view.ui_icons, "loading"), text)
+  end
+end
+
+-- The review-wide label follows whichever owned pane sits top-right, rather than living in the
+-- explorer, which can be hidden or scrolled away while the review is still working.
+local function refresh_headers(view)
+  local headers, target, corner = view.headers or {}, nil, nil
+  for win, state in pairs(headers) do
+    if
+      not vim.api.nvim_win_is_valid(win)
+      or vim.api.nvim_win_get_tabpage(win) ~= view.tab
+      or (state.value and vim.wo[win].winbar ~= state.value)
+    then
+      headers[win] = nil
+    elseif vim.api.nvim_win_get_config(win).relative == "" then
+      local position = vim.api.nvim_win_get_position(win)
+      local right = position[2] + vim.api.nvim_win_get_width(win)
+      if not corner or position[1] < corner[1] or (position[1] == corner[1] and right > corner[2]) then
+        target, corner = win, { position[1], right }
+      end
+    end
+  end
+  local group, label = activity(view)
+  for win, state in pairs(headers) do
+    local value = state.left .. "%=" .. (state.right or "")
+    if win == target and label then
+      -- A dim label between the path and the endpoint read as part of the header, so it takes
+      -- the far edge in a status color instead.
+      value = value .. "%#DiffreelActivity" .. group .. "# " .. ui.winbar(label) .. " %* "
+    end
+    if value ~= state.value then
+      presentation.header(view, win, value)
+      if vim.wo[win].winbar == value then
+        state.value = value
+      else
+        headers[win] = nil
+      end
+    end
+  end
+end
+
+local function header(view, win, left, right)
+  view.headers = view.headers or {}
+  local state = view.headers[win]
+  -- A pane restored while paused must be claimed again, not skipped as someone else's winbar.
+  local value = state and vim.api.nvim_win_is_valid(win) and vim.wo[win].winbar == state.value and state.value or nil
+  view.headers[win] = { left = left, right = right, value = value }
+  refresh_headers(view)
+end
+
 local function render(view, cursor_path, frame_only)
   if not valid(view) or not vim.api.nvim_buf_is_valid(view.explorer_buf) then
-    status.update(view, {})
     return
   end
   if view.error or not view.ready then
     local label = view.error and ui.label(view.ui_icons, "error", "Update stopped: " .. explorer.display(view.error))
       or ui.prefix(spinner.frame() or ui.icon(view.ui_icons, "loading"), "Loading " .. title(view))
     local group = view.error and "DiffreelExplorerError" or "DiffreelDiffWinbarState"
-    presentation.header(
+    header(
       view,
       view.layout == "inline" and view.right_win or view.left_win,
       " %#" .. group .. "#%<" .. ui.winbar(label) .. "%*"
     )
   end
-  if not panel.visible(view) or view.layout_changing then
-    status.update(view, {})
+  if view.layout_changing then
+    return
+  end
+  if not panel.visible(view) then
+    refresh_headers(view)
     return
   end
   local position = vim.api.nvim_win_call(view.explorer_win, vim.fn.winsaveview)
@@ -221,40 +292,29 @@ local function render(view, cursor_path, frame_only)
       break
     end
   end
-  presentation.header(
+  header(
     view,
     view.explorer_win,
-    " %#DiffreelExplorerTitle#"
-      .. ui.winbar(ui.label(view.ui_icons, "changes", "Changes"))
-      .. "%*%=%#DiffreelExplorerFileCount#"
-      .. position_label
-      .. count
-      .. " %*"
+    " %#DiffreelExplorerTitle#" .. ui.winbar(ui.label(view.ui_icons, "changes", "Changes")) .. "%*",
+    "%#DiffreelExplorerFileCount# " .. position_label .. count .. " %*"
   )
   view.rows, view.tree = rows, tree
   for _, row in ipairs(rows) do
     lines[#lines + 1] = row.text
   end
-  local details, footer_rows, status_parts = {}, {}, {}
-  local function compose(text, icon)
+  local details, footer_rows = {}, {}
+  local function append(text, group, id, icon)
     -- Overlaying the frame as a separate extmark would land it on the continuation lines
     -- ui.wrap produces, so the frame replaces the icon in the slot ui.label already reserves.
     local glyph = icon == "loading" and not view.error and spinner.frame() or nil
-    return icon and (glyph and ui.prefix(glyph, text) or ui.label(view.ui_icons, icon, text)) or text
-  end
-  local function append(text, group, id, icon)
-    for _, part in ipairs(ui.wrap(compose(text, icon), width)) do
+    local label = icon and (glyph and ui.prefix(glyph, text) or ui.label(view.ui_icons, icon, text)) or text
+    for _, part in ipairs(ui.wrap(label, width)) do
       lines[#lines + 1] = part.text
       part.id = id or group
       footer_rows[#lines] = part
       if group then
         details[#details + 1] = { row = #lines - 1, group = "DiffreelExplorer" .. group }
       end
-    end
-  end
-  local function pin(text, group, icon)
-    for _, part in ipairs(ui.wrap(compose(text, icon), width)) do
-      status_parts[#status_parts + 1] = { text = part.text, group = group and "DiffreelExplorer" .. group or nil }
     end
   end
   if #rows == 0 then
@@ -294,11 +354,6 @@ local function render(view, cursor_path, frame_only)
           append("Line counts: " .. explorer.display(reason), "StatsUnavailable", "stats_reason", "warning")
         end
       end
-      if stats.pending then
-        pin("Counting saved lines…", "StatsPending", "loading")
-      end
-    else
-      pin("Counting saved lines…", "StatsPending", "loading")
     end
   end
   if selected and selected.git and selected.git.submodule_state then
@@ -327,29 +382,11 @@ local function render(view, cursor_path, frame_only)
     end
   end
   if view.error then
-    pin("Update stopped: " .. explorer.display(view.error), "Error", "error")
-    pin("R: retry", "Error")
+    append("Update stopped: " .. explorer.display(view.error), "Error", "error", "error")
   elseif view.disk_conflict then
     append("Unsaved buffer differs from disk", "Conflict", "conflict", "warning")
   elseif view.navigation then
-    pin("Paused", "Paused", "paused")
-    pin("Return to source or select a file", "Paused")
-  elseif view.updating then
-    pin("Updating…", "Loading", "loading")
-  end
-  if #status_parts > status.capacity(view.explorer_win) then
-    -- Splitting the block would leave the remainder both invisible and unreachable by scrolling.
-    for _, part in ipairs(status_parts) do
-      lines[#lines + 1] = part.text
-      if part.group then
-        details[#details + 1] = { row = #lines - 1, group = part.group }
-      end
-    end
-    status_parts = {}
-  end
-  local content = #lines
-  for _ = 1, #status_parts do
-    lines[#lines + 1] = ""
+    append("Return to source or select a file", "Paused", "paused_hint")
   end
   local rendered = view.explorer_render
   if
@@ -394,7 +431,7 @@ local function render(view, cursor_path, frame_only)
       tick = vim.api.nvim_buf_get_changedtick(view.explorer_buf),
     }
   end
-  status.update(view, status_parts)
+  refresh_headers(view)
   view.footer_rows = footer_rows
   if frame_only then
     return
@@ -403,7 +440,7 @@ local function render(view, cursor_path, frame_only)
   local target = explorer.cursor_path(rows, explicit or (old and old.path) or view.selected_path)
   if not explicit and footer_anchor then
     local row, col = ui.locate(footer_rows, footer_anchor)
-    row = row or math.min(content, math.max(#rows + 4, position.lnum + #rows - #old_rows))
+    row = row or math.min(#lines, math.max(#rows + 4, position.lnum + #rows - #old_rows))
     position.topline = math.max(1, position.topline + row - position.lnum)
     position.lnum, position.col = row, col or position.col
     vim.api.nvim_win_call(view.explorer_win, function()
@@ -413,7 +450,7 @@ local function render(view, cursor_path, frame_only)
     if position.lnum > 3 then
       position.lnum = position.lnum + #rows - #old_rows
     end
-    position.lnum = math.min(content, math.max(1, position.lnum))
+    position.lnum = math.min(#lines, math.max(1, position.lnum))
     vim.api.nvim_win_call(view.explorer_win, function()
       vim.fn.winrestview(position)
     end)
@@ -645,13 +682,8 @@ local function sync_buffer_state(view)
       "HEAD · " .. (view.comparison.left == "" and "Empty tree" or view.comparison.left:sub(1, 8))
     )
   end
-  presentation.header(
-    view,
-    view.left_win,
-    path .. "%=%#DiffreelDiffWinbarRevision# " .. ui.winbar(left_revision) .. " %*"
-  )
   if view.file_missing then
-    presentation.header(
+    header(
       view,
       view.left_win,
       path
@@ -659,6 +691,8 @@ local function sync_buffer_state(view)
         .. ui.winbar(ui.label(view.ui_icons, "warning", "File is absent from both endpoints"))
         .. "%*"
     )
+  else
+    header(view, view.left_win, path, "%#DiffreelDiffWinbarRevision# " .. ui.winbar(left_revision) .. " %*")
   end
   local detail = dirty
       and format_label({
@@ -682,11 +716,11 @@ local function sync_buffer_state(view)
       right_revision = ui.label(view.ui_icons, "warning", "File is absent from both endpoints")
     end
   end
-  presentation.header(
+  header(
     view,
     view.right_win,
-    path
-      .. "%=%#"
+    path,
+    "%#"
       .. (dirty and "DiffreelDiffWinbarModified" or "DiffreelDiffWinbarRevision")
       .. "# "
       .. ui.winbar(right_revision)
@@ -1576,7 +1610,6 @@ local function apply_explorer(view, next_options, settings, automatic)
   local width = panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win)
   local height = panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win)
   full_name.close(view)
-  status.update(view, {})
   if not automatic then
     popup.close(view, "path_popup")
     help.close(view)
@@ -2180,9 +2213,6 @@ local function dispose(view)
     full_name.dispose(view)
   end)
   cleanup(function()
-    status.dispose(view)
-  end)
-  cleanup(function()
     help.close(view)
   end)
   cleanup(function()
@@ -2450,7 +2480,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "CursorMoved", "WinEnter", "BufWinEnter", "WinScrolled", "WinResized" }, {
     group = group,
     callback = function(event)
-      if full_name.owns(tonumber(event.match)) or status.owns(tonumber(event.match)) then
+      if full_name.owns(tonumber(event.match)) then
         return
       end
       for _, view in pairs(M.views) do
@@ -2483,12 +2513,10 @@ function M.setup(opts)
       "winbar",
     },
     callback = function()
-      local current = vim.api.nvim_get_current_win()
-      if full_name.owns(current) or status.owns(current) then
+      if full_name.owns(vim.api.nvim_get_current_win()) then
         return
       end
       for _, view in pairs(M.views) do
-        status.reposition(view)
         full_name.update(view)
       end
     end,
@@ -2641,9 +2669,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "TabEnter", "TabClosed", "WinClosed", "BufWinEnter" }, {
     group = group,
     callback = function(event)
-      if
-        event.event == "WinClosed" and (full_name.owns(tonumber(event.match)) or status.owns(tonumber(event.match)))
-      then
+      if event.event == "WinClosed" and full_name.owns(tonumber(event.match)) then
         return
       end
       vim.schedule(function()
@@ -2653,9 +2679,6 @@ function M.setup(opts)
         for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
           if event.event == "TabEnter" then
             resize_view(view)
-            if valid(view) then
-              status.reposition(view)
-            end
           end
           if not valid(view) then
             dispose(view)

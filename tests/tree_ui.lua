@@ -375,15 +375,18 @@ end
 local function explorer_text(view)
   return table.concat(vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false), "\n")
 end
-local function status_text(view)
-  local state = view.status
-  if not state or not state.win or not vim.api.nvim_win_is_valid(state.win) then
-    return ""
+local function bars(view)
+  local texts = {}
+  for _, name in ipairs({ "explorer_win", "left_win", "right_win" }) do
+    local win = view[name]
+    if win and vim.api.nvim_win_is_valid(win) then
+      texts[#texts + 1] = vim.wo[win].winbar
+    end
   end
-  return table.concat(vim.api.nvim_buf_get_lines(state.buf, 0, -1, false), "\n")
+  return table.concat(texts, "\n")
 end
 local function waiting_text(view)
-  return explorer_text(view) .. "\n" .. status_text(view)
+  return explorer_text(view) .. "\n" .. bars(view)
 end
 
 test("progress labels carry a spinner frame while work is in flight", function(t)
@@ -393,7 +396,7 @@ test("progress labels carry a spinner frame while work is in flight", function(t
   local updating = waiting_text(view)
   assert(view.updating, "refresh did not mark the view as updating")
   assert(not explorer_text(view):find("Updating…", 1, true), "Updating… stayed in the explorer buffer")
-  assert(status_text(view):find("Updating…", 1, true), status_text(view))
+  assert(vim.wo[view.right_win].winbar:find("Updating…", 1, true), bars(view))
   assert(spinner_glyph(updating), "Updating label had no spinner frame: " .. updating)
   assert(
     not updating:find(loading_icon(), 1, true),
@@ -415,10 +418,8 @@ test("every waiting label in a review shows the same frame", function(t)
   local second = plugin.open({ root = t.root })
   local winbar = spinner_glyph(vim.wo[second.left_win].winbar)
   local body = spinner_glyph(explorer_text(second))
-  local overlay = spinner_glyph(status_text(second))
-  assert(winbar and body and overlay, "A waiting review had no spinner glyph: " .. waiting_text(second))
+  assert(winbar and body, "A waiting review had no spinner glyph: " .. waiting_text(second))
   assert(winbar == body, "The winbar and the explorer disagreed: " .. winbar .. " vs " .. body)
-  assert(winbar == overlay, "The winbar and the overlay disagreed: " .. winbar .. " vs " .. overlay)
   ready(second)
   plugin.close(second)
 end)
@@ -769,178 +770,43 @@ test("large integer limits reach the daemon without scientific notation", functi
   assert(#view.entries == #t.paths)
 end)
 
-local function fill_explorer(t, count)
-  for i = 1, count do
-    t.write(string.format("filler/f%03d.lua", i), "return 2\n")
-  end
-  plugin.refresh(t.view)
-  ready(t.view)
-end
-
-test("the status overlay covers the explorer's bottom text rows", function(t)
-  local view, status = t.view, require("diffreel.status")
-  fill_explorer(t, 60)
-  vim.api.nvim_set_current_win(view.explorer_win)
-  local count = vim.api.nvim_buf_line_count(view.explorer_buf)
-  -- G alone can leave topline short of the bottom, which makes botline a useless reference row.
-  vim.api.nvim_win_call(view.explorer_win, function()
-    local height = vim.fn.getwininfo(view.explorer_win)[1].height
-    vim.fn.winrestview({ lnum = count, col = 0, topline = math.max(1, count - height + 1) })
-  end)
-  vim.cmd("redraw")
-  local parts = {
-    { text = " Updating…", group = "DiffreelExplorerLoading" },
-    { text = "  still working", group = "DiffreelExplorerLoading" },
-  }
-  status.update(view, parts)
-  vim.cmd("redraw")
-  local state = view.status
-  assert(state and state.win and vim.api.nvim_win_is_valid(state.win), "The overlay window was not created")
-  assert(status.owns(state.win), "The overlay did not claim its window")
-  local info = vim.fn.getwininfo(view.explorer_win)[1]
-  local bottom = vim.fn.screenpos(view.explorer_win, info.botline, 1).row
-  local float = vim.fn.getwininfo(state.win)[1]
-  assert(info.botline == count, ("The explorer did not scroll to its last line: %d"):format(info.botline))
-  assert(
-    float.winrow + #parts - 1 == bottom,
-    ("Overlay ended at screen row %d, explorer bottom text row is %d"):format(float.winrow + #parts - 1, bottom)
-  )
-  assert(float.width == info.width - info.textoff, ("Overlay width %d vs %d"):format(float.width, info.width))
-  assert(
-    vim.api.nvim_buf_get_lines(state.buf, 0, -1, false)[1] == " Updating…",
-    vim.inspect(vim.api.nvim_buf_get_lines(state.buf, 0, -1, false))
-  )
-  status.close(view)
-  assert(not view.status.win, "close() left the overlay window recorded")
-  status.dispose(view)
-  assert(view.status == nil, "dispose() left overlay state behind")
-end)
-
-test("the explorer reserves no gutter unless statuscolumn is set", function(t)
-  local view = t.view
-  vim.cmd("redraw")
-  assert(vim.fn.getwininfo(view.explorer_win)[1].textoff == 0, "The explorer reserved a gutter by default")
-  vim.wo[view.explorer_win].statuscolumn = "%l "
-  vim.cmd("redraw")
-  local offset = vim.fn.getwininfo(view.explorer_win)[1].textoff
-  vim.wo[view.explorer_win].statuscolumn = ""
-  assert(offset > 0, "statuscolumn did not reserve a gutter, so col = textoff is untested")
-end)
-
-local function overlay_height(view)
-  local state = view.status
-  if not state or not state.win or not vim.api.nvim_win_is_valid(state.win) then
-    return 0
-  end
-  return vim.api.nvim_win_get_height(state.win)
-end
-
-test("the pinned rows leave the explorer buffer and reserve their own space", function(t)
-  local view = t.view
-  local before = vim.api.nvim_buf_line_count(view.explorer_buf)
-  plugin.refresh(view)
-  assert(view.updating, "refresh did not mark the view as updating")
-  local height = overlay_height(view)
-  assert(height == 1, "The overlay did not take exactly the Updating… row: " .. height)
-  local lines = vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false)
-  assert(not table.concat(lines, "\n"):find("Updating…", 1, true), "Updating… stayed in the explorer buffer")
-  for index = #lines - height + 1, #lines do
-    assert(lines[index] == "", "Padding row " .. index .. " was not blank: " .. lines[index])
-  end
-  assert(#lines == before + height, ("Line count %d, expected %d"):format(#lines, before + height))
-  for _, id in ipairs({ "updating", "paused", "paused_hint", "error", "retry", "stats_pending" }) do
-    for _, part in pairs(view.footer_rows) do
-      assert(part.id ~= id, "Pinned id stayed in footer_rows: " .. id)
+local function corner(view)
+  for _, name in ipairs({ "explorer_win", "left_win", "right_win" }) do
+    local win = view[name]
+    if win and vim.api.nvim_win_is_valid(win) and vim.wo[win].winbar:find("Updating…", 1, true) then
+      return win
     end
   end
-  assert(
-    vim.api.nvim_get_option_value("scrolloff", { win = view.explorer_win }) >= height,
-    "scrolloff did not reserve the overlay rows"
-  )
-  ready(view)
-  assert(overlay_height(view) == 0, "The overlay outlived the update")
-  assert(vim.api.nvim_buf_line_count(view.explorer_buf) == before, "Padding survived the update")
-end)
+end
 
-test("a long tree keeps its last row above the pinned overlay", function(t)
+test("the review-wide label follows the top-right pane rather than the explorer", function(t)
   local view = t.view
-  fill_explorer(t, 60)
-  vim.api.nvim_set_current_win(view.explorer_win)
+  local release = freeze(view)
   plugin.refresh(view)
-  local height = overlay_height(view)
-  assert(height > 0, "The overlay was not shown while updating")
-  local count = vim.api.nvim_buf_line_count(view.explorer_buf)
-  vim.api.nvim_win_call(view.explorer_win, function()
-    local window = vim.fn.getwininfo(view.explorer_win)[1].height
-    vim.fn.winrestview({ lnum = count - height, col = 0, topline = math.max(1, count - window + 1) })
-  end)
-  vim.cmd("redraw")
-  local info = vim.fn.getwininfo(view.explorer_win)[1]
-  local last = #view.rows + 3
-  local float = vim.fn.getwininfo(view.status.win)[1]
-  assert(vim.fn.screenpos(view.explorer_win, last, 1).row < float.winrow, "The last tree row sat under the overlay")
-  assert(info.botline >= last, "The last tree row was not reachable: " .. info.botline)
-  ready(view)
-end)
-
-test("the overlay is released with the panel, the layout and the review", function(t)
-  local view, status = t.view, require("diffreel.status")
-  plugin.refresh(view)
-  assert(overlay_height(view) > 0, "The overlay was not shown while updating")
+  assert(corner(view) == view.right_win, "Updating… was not in the right pane's winbar: " .. bars(view))
+  assert(
+    vim.wo[view.right_win].winbar:find(" Worktree", 1, true),
+    "The label displaced the pane's endpoint: " .. vim.wo[view.right_win].winbar
+  )
+  assert(
+    vim.wo[view.right_win].winbar:find("Updating… %%%* $"),
+    "The label did not take the far edge on its own background: " .. vim.wo[view.right_win].winbar
+  )
   plugin.set_explorer(view, { visible = false })
-  assert(overlay_height(view) == 0, "Hiding the panel left the overlay open")
-  plugin.set_explorer(view, { visible = true })
-  ready(view)
-  local win = view.explorer_win
-  local saved = vim.api.nvim_get_option_value("scrolloff", { win = win })
-  plugin.refresh(view)
+  assert(corner(view) == view.right_win, "Hiding the explorer lost the label: " .. bars(view))
+  plugin.set_explorer(view, { visible = true, position = "right" })
+  assert(corner(view) == view.explorer_win, "A right explorer did not take the label: " .. bars(view))
   assert(
-    vim.api.nvim_get_option_value("scrolloff", { win = win }) >= overlay_height(view),
-    "scrolloff did not reserve the overlay rows"
+    select(2, bars(view):gsub("Updating…", "")) == 1,
+    "The label appeared in more than one winbar: " .. bars(view)
   )
+  plugin.set_explorer(view, { position = "left" })
+  release()
   ready(view)
-  assert(
-    vim.api.nvim_get_option_value("scrolloff", { win = win }) == saved and view.explorer_win == win,
-    "scrolloff was not restored on the same window"
-  )
-  plugin.refresh(view)
-  local overlay = view.status and view.status.win
-  assert(overlay and status.owns(overlay), "The overlay window was not claimed")
-  ready(view)
-  plugin.close(view)
-  assert(not overlay or not vim.api.nvim_win_is_valid(overlay), "Closing the review left the overlay window open")
+  assert(not bars(view):find("Updating…", 1, true), "The label outlived the update: " .. bars(view))
 end)
 
-test("a waiting review keeps its overlay inside its own tabpage", function(t)
-  local view = t.view
-  local second = plugin.open({ root = t.root })
-  ready(second)
-  assert(second.tab ~= view.tab, "The second review did not open in its own tabpage")
-  vim.api.nvim_set_current_tabpage(second.tab)
-  plugin.refresh(view)
-  assert(view.updating, "refresh did not mark the first review as updating")
-  local state = view.status
-  if state and state.win and vim.api.nvim_win_is_valid(state.win) then
-    assert(
-      vim.api.nvim_win_get_tabpage(state.win) == view.tab,
-      "A waiting review drew its overlay in the tabpage being viewed"
-    )
-  end
-  vim.api.nvim_set_current_tabpage(view.tab)
-  vim.api.nvim_exec_autocmds("TabEnter", { modeline = false })
-  assert(
-    vim.wait(1000, function()
-      return overlay_height(view) > 0
-    end, 5),
-    "Returning to the review's tabpage did not bring its overlay back"
-  )
-  ready(view)
-  assert(overlay_height(view) == 0, "The overlay outlived the update")
-  plugin.close(second)
-end)
-
-test("a stopped review keeps its pinned message across a tabpage round trip", function(t)
-  local view = t.view
+test("a stopped review keeps the retry hint in the corner and the cause in the footer", function(t)
   local second = plugin.open({ root = t.root, left = "no-such-revision" })
   assert(
     vim.wait(5000, function()
@@ -948,69 +814,27 @@ test("a stopped review keeps its pinned message across a tabpage round trip", fu
     end, 5),
     "The review did not report an error"
   )
-  assert(status_text(second):find("Update stopped", 1, true), status_text(second))
-  vim.api.nvim_set_current_tabpage(view.tab)
-  vim.api.nvim_exec_autocmds("WinResized", { modeline = false })
-  vim.wait(200, function()
-    return false
-  end)
-  vim.api.nvim_set_current_tabpage(second.tab)
-  vim.api.nvim_exec_autocmds("TabEnter", { modeline = false })
-  assert(
-    vim.wait(1000, function()
-      return status_text(second):find("Update stopped", 1, true) ~= nil
-    end, 5),
-    "A stopped review lost its pinned message after a tabpage round trip: " .. explorer_text(second)
-  )
-  plugin.close(second)
-end)
-
-test("the reserved rows below the tree stay blank and hold no message", function(t)
-  local view = t.view
-  plugin.refresh(view)
-  local height = overlay_height(view)
-  assert(height > 0, "The overlay was not shown while updating")
-  local lines = vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false)
-  local content = #lines - height
-  for index = content + 1, #lines do
-    assert(lines[index] == "", "A reserved row carried text: " .. lines[index])
-    assert(view.footer_rows[index] == nil, "A reserved row was registered as a footer message")
-  end
-  ready(view)
-  local after = vim.api.nvim_buf_get_lines(view.explorer_buf, 0, -1, false)
-  assert(#after == content, ("Reserved rows survived the update: %d vs %d"):format(#after, content))
-end)
-
-test("a pane too short for the pinned block keeps the whole message in the buffer", function(t)
-  local second = plugin.open({ root = t.root, left = "no-such-revision" })
-  assert(
-    vim.wait(5000, function()
-      return second.error ~= nil
-    end, 5),
-    "The review did not report an error"
-  )
-  assert(overlay_height(second) > 0, "The overlay was not shown for a stopped review")
-  assert(status_text(second):find("R: retry", 1, true), status_text(second))
-  local before = vim.api.nvim_buf_line_count(second.explorer_buf)
-  plugin.set_explorer(second, { position = "bottom", height = 4 })
-  assert(
-    vim.wait(1000, function()
-      return require("diffreel.status").capacity(second.explorer_win) < 2
-    end, 5),
-    "The pane did not shrink below the pinned block"
-  )
-  plugin.refresh(second)
-  vim.wait(200, function()
-    return false
-  end)
+  assert(bars(second):find("R: retry", 1, true), bars(second))
   local text = explorer_text(second)
-  assert(overlay_height(second) == 0, "The overlay stayed open in a pane too short for it")
-  assert(text:find("Update stopped", 1, true), "The cause left the buffer when the overlay was skipped: " .. text)
-  assert(text:find("R: retry", 1, true), "The retry hint was dropped when the overlay was skipped: " .. text)
-  local lines = vim.api.nvim_buf_get_lines(second.explorer_buf, 0, -1, false)
-  assert(lines[#lines] ~= "", "Reserved rows were added even though the overlay was skipped")
-  assert(before > 0)
+  assert(text:find("Update stopped: ", 1, true), "The cause was not in the explorer footer: " .. text)
+  plugin.set_explorer(second, { visible = false })
+  assert(bars(second):find("R: retry", 1, true), "Hiding the explorer lost the retry hint: " .. bars(second))
   plugin.close(second)
+end)
+
+test("a paused review names the pause in the corner and the way back in the footer", function(t)
+  local view = t.view
+  vim.api.nvim_set_current_win(view.right_win)
+  vim.cmd("enew")
+  assert(
+    vim.wait(1000, function()
+      return view.navigation
+    end, 5),
+    "Leaving the source buffer did not pause the review"
+  )
+  assert(vim.wo[view.explorer_win].winbar:find("Paused", 1, true), bars(view))
+  local text = explorer_text(view)
+  assert(text:gsub("%s+", " "):find("Return to source or select a file", 1, true), text)
 end)
 
 for _, failure in ipairs(failures) do
