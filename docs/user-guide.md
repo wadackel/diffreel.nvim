@@ -559,7 +559,7 @@ See `:help diffreel-highlight-groups` for every public group and its default.
 
 ## Understand the review
 
-The pane headers emphasize the file name, dim its parent directories, and identify a revision, the index, or the working-tree buffer. Unsaved buffers use the modification color. Ordinary LF text needs no format label; CRLF, BOM, missing final newlines, and content limitations remain explicit.
+The pane headers emphasize the file name, dim its parent directories, and identify a revision, the index, or the working-tree buffer. For a rename, the left header shows the source path. Unsaved buffers use the modification color. Ordinary LF text needs no format label; CRLF, BOM, missing final newlines, and content limitations remain explicit.
 
 The explorer header shows the selected file's position, such as `2 / 12 files`, in the current tree or list order. A slim marker and a background highlight identify the selected file independently of the explorer cursor. HEAD-following reviews show `HEAD` in the explorer comparison; the revision pane retains the resolved commit ID.
 

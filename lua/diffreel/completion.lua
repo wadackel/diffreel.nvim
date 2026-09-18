@@ -162,8 +162,10 @@ function M.complete(arglead, cmdline, cursorpos, review_root)
     or previous == "--exclude"
     or previous == "--repo"
     or previous == "-C"
-  if not after_paths and not path_option and lead:sub(1, 1) == "-" then
-    return matching(args[1] == "DiffreelPRCacheClear" and { "--repo=", "-C" } or flags, lead)
+  if args[1] == "DiffreelPRCacheClear" and not path_option then
+    return matching({ "--repo=", "-C" }, lead)
+  elseif not after_paths and not path_option and lead:sub(1, 1) == "-" then
+    return matching(flags, lead)
   end
   local root = supplied and vim.fs.root(supplied, { ".git" })
     or review_root

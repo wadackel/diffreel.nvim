@@ -315,7 +315,10 @@ function M.parse(args)
     end
     i = i + 1
   end
-  assert(#revisions <= 2, "Usage: Diffreel [options] [left revision] [right revision|worktree] [-- pathspec ...]")
+  assert(
+    #revisions <= 2,
+    "diffreel: usage: Diffreel [options] [left revision] [right revision|worktree] [-- pathspec ...]"
+  )
   result.left, result.right = revisions[1], revisions[2]
   if mode == "staged" then
     assert(#revisions <= 1, "diffreel: --staged accepts at most one baseline revision")

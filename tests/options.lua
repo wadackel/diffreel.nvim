@@ -106,6 +106,24 @@ test("invalid command and API combinations are rejected before opening windows",
   end
 end)
 
+test("invalid command arguments are reported without a Lua traceback", function()
+  require("diffreel").setup({ watch = false })
+  local tabs = #vim.api.nvim_list_tabpages()
+  for command, message in pairs({
+    ["Diffreel --unknown"] = "diffreel: unknown option --unknown",
+    ["Diffreel a b c"] = "diffreel: usage: Diffreel",
+    ["DiffreelLayout bogus"] = "diffreel: invalid layout",
+    ["DiffreelPRCacheClear HEAD"] = "diffreel: PRCacheClear accepts only --repo/-C",
+  }) do
+    local ok, err = pcall(vim.cmd, command)
+    assert(not ok, command .. " succeeded")
+    assert(err:find(message, 1, true), err)
+    assert(not err:find("traceback", 1, true), err)
+    assert(not err:find("%.lua:%d+:"), err)
+  end
+  eq(tabs, #vim.api.nvim_list_tabpages())
+end)
+
 test("status icons inherit individual keys without sharing input tables", function()
   local options = require("diffreel.options")
   local config = { explorer = { status_icons = { added = "+", modified = "~" } } }
