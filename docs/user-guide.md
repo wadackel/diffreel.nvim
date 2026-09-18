@@ -250,7 +250,7 @@ enabling `wrap` suppresses it. Use `K` for the complete absolute path, or set
 `explorer.full_name = false` to disable automatic expansion. This boolean works
 in `setup()`, `open()`, and `set_explorer()`.
 
-Press `<Leader>b` in a review pane to hide or show the explorer. `<Leader>e` from a diff pane also shows a hidden explorer before focusing it. Configure defaults or update an existing view:
+Press `<Leader>b` in a review pane to hide or show the explorer. An explorer hidden by `<Leader>b` while focused regains focus when `<Leader>b` shows it again; otherwise focus stays in the current pane. `<Leader>e` from a diff pane also shows a hidden explorer before focusing it. Configure defaults or update an existing view:
 
 ```lua
 require("diffreel").setup({
