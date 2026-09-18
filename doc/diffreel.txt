@@ -315,11 +315,13 @@ shifts left. It closes on an unclipped row or when leaving the explorer.
 Horizontal scrolling and 'wrap' suppress it. Disable automatic expansion with
 explorer.full_name = false; K remains available for the complete absolute path.
 
-<Leader>b hides/shows the explorer. <Leader>e from a diff pane shows a hidden
-explorer before focusing it. Use |diffreel-explorer| defaults or
-|diffreel.set_explorer()| for left/right/top/bottom placement. Layout changes
-preserve pane buffers, drafts, selection, fold state and scroll position,
-without querying Git. Native pane closure still disposes a broken review.
+<Leader>b hides/shows the explorer. An explorer it hid while focused regains
+focus when <Leader>b shows it again; otherwise focus stays where it is.
+<Leader>e from a diff pane shows a hidden explorer before focusing it. Use
+|diffreel-explorer| defaults or |diffreel.set_explorer()| for
+left/right/top/bottom placement. Layout changes preserve pane buffers, drafts,
+selection, fold state and scroll position, without querying Git. Native pane
+closure still disposes a broken review.
 
 K on an explorer row opens its complete absolute path in a wrapping popup,
 with control characters escaped. It neither copies nor reads file content
@@ -1140,6 +1142,9 @@ set_explorer([{view}], {settings})                       *diffreel.set_explorer(
 toggle_explorer([{view}])                            *diffreel.toggle_explorer()*
 focus_explorer([{view}])                              *diffreel.focus_explorer()*
     Toggle visibility, or show and focus the explorer. Default: current tab.
+    When toggle_explorer() hid the explorer while it had focus, showing it
+    again with toggle_explorer() returns focus to it, unless the view is in
+    another tab. |diffreel.set_explorer()| never focuses the explorer.
 
 show_path([{view}], [{path}])                             *diffreel.show_path()*
     Display a complete absolute path without copying. Default: current pane's

@@ -1644,6 +1644,9 @@ local function apply_explorer(view, next_options, settings, automatic)
     popup.close(view, "path_popup")
     help.close(view)
   end
+  if next_options.visible then
+    view.explorer_refocus = nil
+  end
   panel.apply(view, next_options, settings, sizing)
   if not valid(view) then
     return
@@ -1849,8 +1852,19 @@ end
 
 function M.toggle_explorer(view)
   view = view or current_tab_view()
-  if view and valid(view) then
-    M.set_explorer(view, { visible = not panel.visible(view) })
+  if not view or not valid(view) then
+    return
+  end
+  if panel.visible(view) then
+    local focused = vim.api.nvim_get_current_win() == view.explorer_win
+    M.set_explorer(view, { visible = false })
+    view.explorer_refocus = focused and not panel.visible(view) or nil
+    return
+  end
+  local refocus = view.explorer_refocus
+  M.set_explorer(view, { visible = true })
+  if refocus and valid(view) and panel.visible(view) and vim.api.nvim_get_current_tabpage() == view.tab then
+    vim.api.nvim_set_current_win(view.explorer_win)
   end
 end
 
