@@ -1,12 +1,12 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import {
   argumentsFor,
-  exists,
   join,
   mkdir,
   pathsBelow,
   read,
   run,
+  shellQuote,
   temporary,
 } from "../scripts/lib.ts";
 
@@ -46,25 +46,28 @@ Deno.test("CLI options retain multi-value arguments and reject invalid numbers",
 Deno.test("command deadlines remove owned descendants", async () => {
   using temp = temporary("command-timeout-");
   const marker = join(temp.path, "child.pid");
-  const code =
-    `const child=new Deno.Command(Deno.execPath(),{args:["eval","--no-config","setInterval(()=>{},1000)"],stdin:"null",stdout:"null",stderr:"null"}).spawn();Deno.writeTextFileSync(${
-      JSON.stringify(marker)
-    },String(child.pid));await new Promise(()=>{});`;
+  // An interpreter start can outlast the deadline on a slow machine, leaving no pid to check.
+  const code = `sleep 30 >/dev/null 2>&1 & printf %s "$!" > ${
+    shellQuote(marker + ".tmp")
+  } && mv ${shellQuote(marker + ".tmp")} ${shellQuote(marker)}; wait`;
+  let pid = 0;
   try {
     await assertRejects(
-      () =>
-        run([Deno.execPath(), "eval", "--no-config", code], { timeout: 0.5 }),
+      () => run(["/bin/sh", "-c", code], { timeout: 0.5 }),
       Error,
       "Timed out",
     );
-    const status = await run(["ps", "-o", "stat=", "-p", read(marker)], {
+    // A ps invocation rejecting its argument would satisfy the check below without reading a process.
+    pid = Number(read(marker).trim());
+    assertEquals(pid > 0, true);
+    const status = await run(["ps", "-o", "stat=", "-p", String(pid)], {
       check: false,
     });
     assertEquals(!status.success || status.stdout.trim().startsWith("Z"), true);
   } finally {
-    if (exists(marker)) {
+    if (pid > 0) {
       try {
-        Deno.kill(Number(read(marker)), "SIGKILL");
+        Deno.kill(pid, "SIGKILL");
       } catch { /* The deadline should already have reaped the child. */ }
     }
   }
