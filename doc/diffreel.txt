@@ -117,6 +117,8 @@ repository. This file is the reference for commands, options, and Lua APIs.
     also accept their value
     as the next argument. Escape spaces with a backslash; shell quotes do not
     group command arguments. A --staged/--unstaged conflict is an error.
+    Invalid arguments fail the command with a one-line error message and open
+    no review.
 
     left...right is shorthand for a fixed merge-base comparison. left...
     compares merge-base(left, HEAD) with worktree. Resolved commit endpoints
@@ -650,7 +652,8 @@ ui_icons: table (setup() only)
     The loading symbol animates while work is in flight; see
     |diffreel-spinner|.
 
-    Pane labels distinguish Worktree from Unsaved. The Changes header shows
+    Pane labels distinguish Worktree from Unsaved. For a rename, the left pane
+    header shows the source path. The Changes header shows
     the selected file position and total as 2 / 3. Status descriptions wrap
     to the explorer width; continuation lines indent by two spaces where
     space permits.

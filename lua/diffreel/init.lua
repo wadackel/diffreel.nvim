@@ -111,6 +111,29 @@ local function command_complete(lead, command, position)
   return completion.complete(lead, command, position, view and view.root)
 end
 
+-- A raised error would show a Lua traceback for a mistyped argument; echoing it as an error
+-- still fails the command for callers such as pcall(vim.cmd, ...).
+local function user_command(name, callback, opts)
+  vim.api.nvim_create_user_command(name, function(args)
+    local message
+    local ok, err = xpcall(function()
+      callback(args)
+    end, function(raised)
+      message = type(raised) == "string"
+          and (raised:match("^diffreel: .*") or raised:match("^[^\n]-:%d+: (diffreel: .*)"))
+        or nil
+      return message or debug.traceback(raised, 2)
+    end)
+    if ok then
+      return
+    elseif message then
+      vim.api.nvim_echo({ { message } }, true, { err = true })
+    else
+      error(err, 0)
+    end
+  end, opts)
+end
+
 function M.get_current()
   local win = vim.api.nvim_get_current_win()
   for _, view in pairs(M.views) do
@@ -151,13 +174,15 @@ local function title(view)
   local left = view.comparison and view.comparison.left or view.spec.left
   local right = view.comparison and view.comparison.right or view.spec.right
   local left_label = view.follow_head and ui.label(view.ui_icons, left == "" and "empty" or "commit", "HEAD")
-    or ui.endpoint(view.ui_icons, left, left:sub(1, 10))
-  return left_label .. " → " .. ui.endpoint(view.ui_icons, right, right:sub(1, 10))
+    or ui.endpoint(view.ui_icons, left, vim.fn.strcharpart(left, 0, 10))
+  return left_label .. " → " .. ui.endpoint(view.ui_icons, right, vim.fn.strcharpart(right, 0, 10))
 end
 
 local function format_label(side)
   if side.reason then
     return side.reason
+  elseif side.exists == false then
+    return ""
   end
   return (side.fileformat == "dos" and "CRLF" or "LF")
     .. (side.bom and " · BOM" or "")
@@ -692,7 +717,12 @@ local function sync_buffer_state(view)
         .. "%*"
     )
   else
-    header(view, view.left_win, path, "%#DiffreelDiffWinbarRevision# " .. ui.winbar(left_revision) .. " %*")
+    header(
+      view,
+      view.left_win,
+      entry.old_path and header_path(entry.old_path) or path,
+      "%#DiffreelDiffWinbarRevision# " .. ui.winbar(left_revision) .. " %*"
+    )
   end
   local detail = dirty
       and format_label({
@@ -725,7 +755,7 @@ local function sync_buffer_state(view)
       .. "# "
       .. ui.winbar(right_revision)
       .. "%*"
-      .. (detail == "LF" and "" or ("%#DiffreelDiffWinbarState# · " .. detail:gsub("%%", "%%%%")))
+      .. ((detail == "LF" or detail == "") and "" or ("%#DiffreelDiffWinbarState# · " .. detail:gsub("%%", "%%%%")))
       .. " %*"
   )
 end
@@ -883,14 +913,14 @@ local function select(view, path, reveal, prepared)
       if not plain then
         left = {
           kind = "limited",
-          reason = entry.left.reason or entry.status,
+          reason = entry.left.reason or entry.right.reason or entry.status,
           mode = entry.left.mode,
           size = entry.left.size,
           oid = entry.left.oid,
         }
         right = {
           kind = "limited",
-          reason = entry.right.reason or entry.status,
+          reason = entry.right.reason or entry.left.reason or entry.status,
           mode = entry.right.mode,
           size = entry.right.size,
           oid = entry.right.oid,
@@ -2397,7 +2427,7 @@ function M.setup(opts)
   highlights.apply(colors)
   M.config, active_keymaps = config, resolved
   spinner.configure(config.spinner)
-  vim.api.nvim_create_user_command("Diffreel", function(args)
+  user_command("Diffreel", function(args)
     local values = args.fargs
     if #values == 0 then
       local view = current_tab_view()
@@ -2413,13 +2443,13 @@ function M.setup(opts)
     end
     M.open(parsed)
   end, { nargs = "*", desc = "Review Git changes with diffreel", complete = command_complete })
-  vim.api.nvim_create_user_command("DiffreelClose", function()
+  user_command("DiffreelClose", function()
     M.close()
   end, {})
-  vim.api.nvim_create_user_command("DiffreelRefresh", function()
+  user_command("DiffreelRefresh", function()
     M.refresh()
   end, {})
-  vim.api.nvim_create_user_command("DiffreelLayout", function(args)
+  user_command("DiffreelLayout", function(args)
     if args.args == "" then
       M.cycle_layout()
     else
@@ -2434,7 +2464,7 @@ function M.setup(opts)
     end,
     desc = "Change the current review layout",
   })
-  vim.api.nvim_create_user_command("DiffreelPRCacheClear", function(args)
+  user_command("DiffreelPRCacheClear", function(args)
     local opts = options.parse(args.fargs)
     for name in pairs(opts) do
       assert(name == "root", "diffreel: PRCacheClear accepts only --repo/-C")
@@ -2458,7 +2488,7 @@ function M.setup(opts)
       pr.clear(M.config, root, cleared)
     end
   end, { nargs = "*", complete = command_complete, desc = "Clear unused PR snapshot refs in this repository" })
-  vim.api.nvim_create_user_command("DiffreelInstall", function()
+  user_command("DiffreelInstall", function()
     vim.notify("diffreel: preparing daemon…")
     install.ensure({ managed = true }, function(err, result)
       vim.notify(

@@ -55,6 +55,9 @@ local ok, err = xpcall(function()
   assert(vim.tbl_contains(complete("v"), "v1"))
   assert(vim.tbl_contains(complete(":"), ":0"))
   assert(#calls == 1, "Warm ref completion spawned Git")
+  local clear = "DiffreelPRCacheClear "
+  assert(vim.deep_equal(completion.complete("", clear, #clear), { "--repo=", "-C" }))
+  assert(vim.deep_equal(completion.complete("-", clear .. "-", #clear + 1), { "--repo=", "-C" }))
   require("diffreel").setup({ watch = false })
   local command = vim.api.nvim_get_commands({}).Diffreel
   assert(type(command.complete) == "function", vim.inspect(command))
