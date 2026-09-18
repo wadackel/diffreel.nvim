@@ -41,6 +41,13 @@ Deno.test("release manifests retain protocol, target, size and integrity validat
   );
 });
 
+interface Tampered {
+  release: { isImmutable: boolean };
+  signer?: string;
+  commit?: string;
+  digest?: string;
+}
+
 Deno.test("first publication, interrupted draft retry and immutable release reuse", async () => {
   using temp = temporary("release-lifecycle-");
   const bin = join(temp.path, "bin"), assets = join(temp.path, "assets");
@@ -92,11 +99,40 @@ Deno.test("first publication, interrupted draft retry and immutable release reus
   state = JSON.parse(read(statePath));
   assert(
     state.operations.slice(previous).every((op: string) =>
-      ["view", "download"].includes(op)
+      ["view", "download", "verify"].includes(op)
     ),
+  );
+  assertEquals(
+    state.operations.slice(previous).filter((op: string) => op === "verify")
+      .length,
+    2,
   );
   assertEquals(read(output), "reused=false\nreused=true\n");
   for (const target of TARGETS) {
     assertEquals(read(join(assets, "diffreel-daemon-" + target)), target);
   }
+  const published = read(statePath);
+  const tampering: [string, (value: Tampered) => void][] = [
+    ["Published release is not immutable", (value) => {
+      value.release.isImmutable = false;
+    }],
+    ["does not cover this tag and commit", (value) => {
+      value.commit = "c".repeat(40);
+    }],
+    ["not signed by the GitHub release signer", (value) => {
+      value.signer = "https://attacker.example";
+    }],
+    ["does not cover the verified assets", (value) => {
+      value.digest = "0".repeat(64);
+    }],
+  ];
+  for (const [message, tamper] of tampering) {
+    const broken = JSON.parse(published);
+    tamper(broken);
+    json(statePath, broken);
+    const result = await invoke("fetch", "--target", TARGETS[0]);
+    assert(!result.success && result.stderr.includes(message), message);
+  }
+  write(statePath, published);
+  assert((await invoke("fetch", "--target", TARGETS[0])).success);
 });

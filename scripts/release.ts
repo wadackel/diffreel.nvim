@@ -11,6 +11,8 @@ import {
 } from "./lib.ts";
 
 const REPOSITORY = "github.com/wadackel/diffreel.nvim";
+const RELEASE_SIGNER = "https://dotcom.releases.github.com";
+const PACKAGE = "pkg:github/" + REPOSITORY.replace("github.com/", "");
 export const TARGETS: string[] =
   JSON.parse(read(join(ROOT, "distribution.json"))).targets;
 export interface Asset {
@@ -26,7 +28,21 @@ export interface Manifest {
 interface Release {
   isDraft: boolean;
   isPrerelease: boolean;
+  isImmutable: boolean;
+  targetCommitish: string;
   assets: { name: string; size: number }[];
+}
+interface Attestation {
+  verificationResult: {
+    signature: { certificate: { subjectAlternativeName: string } };
+    statement: {
+      subject: {
+        uri?: string;
+        name?: string;
+        digest: { sha1?: string; sha256?: string };
+      }[];
+    };
+  };
 }
 
 function gh(args: string[], check = true) {
@@ -71,7 +87,7 @@ async function release(buildId: string): Promise<Release | undefined> {
     "view",
     "daemon-" + buildId,
     "--json",
-    "isDraft,isPrerelease,assets",
+    "isDraft,isPrerelease,isImmutable,targetCommitish,assets",
   ], false);
   if (result.success) return JSON.parse(result.stdout);
   if (result.stderr.toLowerCase().includes("not found")) return undefined;
@@ -91,6 +107,48 @@ async function download(buildId: string, asset: string, destination: string) {
     "--clobber",
   ]);
 }
+async function verifyAttestation(
+  { buildId, state, manifest, manifestPath }: {
+    buildId: string;
+    state: Release;
+    manifest: Manifest;
+    manifestPath: string;
+  },
+) {
+  assert(state.isImmutable, "Published release is not immutable");
+  const tag = "daemon-" + buildId;
+  const { verificationResult } = JSON.parse(
+    (await gh(["release", "verify", tag, "--format", "json"])).stdout,
+  ) as Attestation;
+  assert(
+    verificationResult.signature.certificate.subjectAlternativeName ===
+      RELEASE_SIGNER,
+    "Release attestation is not signed by the GitHub release signer",
+  );
+  const subjects = verificationResult.statement.subject;
+  const source = subjects.filter((subject) => subject.uri !== undefined);
+  const attested = subjects.filter((subject) => subject.name !== undefined);
+  assert(
+    source.length === 1 && attested.length === subjects.length - 1 &&
+      source[0].uri === PACKAGE + "@" + tag &&
+      // A retried draft or a reused release was published from an older commit
+      // than the current run, so the run's commit cannot serve as the expectation.
+      source[0].digest.sha1 === state.targetCommitish,
+    "Release attestation does not cover this tag and commit",
+  );
+  const expected = [
+    ...Object.values(manifest.targets).map((asset) =>
+      asset.name + " " + asset.sha256
+    ),
+    "manifest.json " + await sha256(bytes(manifestPath)),
+  ];
+  assert(
+    attested.length === expected.length &&
+      attested.map((subject) => subject.name + " " + subject.digest.sha256)
+          .sort().join() === expected.sort().join(),
+    "Release attestation does not cover the verified assets",
+  );
+}
 async function verifyCohort(
   buildId: string,
   state: Release,
@@ -104,9 +162,13 @@ async function verifyCohort(
       ["manifest.json", ...TARGETS.map((t) => "diffreel-daemon-" + t)].sort()
         .join(),
   );
-  await download(buildId, "manifest.json", join(directory, "manifest.json"));
-  const manifest: Manifest = JSON.parse(read(join(directory, "manifest.json")));
+  const manifestPath = join(directory, "manifest.json");
+  await download(buildId, "manifest.json", manifestPath);
+  const manifest: Manifest = JSON.parse(read(manifestPath));
   validateManifest(manifest, buildId);
+  if (!draft) {
+    await verifyAttestation({ buildId, state, manifest, manifestPath });
+  }
   const sizes = new Map(state.assets.map((a) => [a.name, a.size]));
   for (const [name, asset] of Object.entries(manifest.targets)) {
     assert(sizes.get(asset.name) === asset.size);

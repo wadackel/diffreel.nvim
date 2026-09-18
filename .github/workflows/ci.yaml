@@ -88,6 +88,9 @@ jobs:
             runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    permissions:
+      contents: read
+      attestations: read
     env:
       BUILD_ID: ${{ needs.identity.outputs.build_id }}
       TARGET: ${{ matrix.target }}
@@ -155,6 +158,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      attestations: read
     concurrency:
       group: daemon-${{ needs.identity.outputs.build_id }}
       cancel-in-progress: false

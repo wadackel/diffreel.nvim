@@ -1,4 +1,12 @@
-import { assert, basename, join, json, read } from "../scripts/lib.ts";
+import {
+  assert,
+  basename,
+  bytes,
+  join,
+  json,
+  read,
+  sha256,
+} from "../scripts/lib.ts";
 
 const [command, operation, tag, ...args] = Deno.args;
 assert(command === "release" && tag === "daemon-" + "a".repeat(64));
@@ -10,10 +18,15 @@ const state: {
   release?: {
     isDraft: boolean;
     isPrerelease: boolean;
+    isImmutable: boolean;
+    targetCommitish: string;
     assets: { name: string; size: number }[];
   };
   operations: string[];
   interrupt: boolean;
+  signer?: string;
+  commit?: string;
+  digest?: string;
 } = JSON.parse(read(statePath));
 state.operations.push(operation);
 const save = () => json(statePath, state);
@@ -29,7 +42,13 @@ if (operation === "view") {
     !state.release && args.includes("--draft") && args.includes("--prerelease"),
   );
   assert(option("--target") === "b".repeat(40));
-  state.release = { isDraft: true, isPrerelease: true, assets: [] };
+  state.release = {
+    isDraft: true,
+    isPrerelease: true,
+    isImmutable: false,
+    targetCommitish: option("--target"),
+    assets: [],
+  };
   save();
 } else if (operation === "upload") {
   assert(state.release?.isDraft);
@@ -55,7 +74,39 @@ if (operation === "view") {
   assert(state.release?.isDraft && state.release.assets.length === 5);
   assert(args.includes("--draft=false") && args.includes("--prerelease"));
   state.release.isDraft = false;
+  state.release.isImmutable = true;
   save();
+} else if (operation === "verify") {
+  assert(state.release && !state.release.isDraft);
+  assert(option("--format") === "json");
+  save();
+  const release = state.release;
+  console.log(JSON.stringify({
+    verificationResult: {
+      signature: {
+        certificate: {
+          subjectAlternativeName: state.signer ??
+            "https://dotcom.releases.github.com",
+        },
+      },
+      statement: {
+        subject: [
+          {
+            uri: "pkg:github/wadackel/diffreel.nvim@" + tag,
+            digest: { sha1: state.commit ?? release.targetCommitish },
+          },
+          ...await Promise.all(release.assets.map(async (asset) => ({
+            name: asset.name,
+            digest: {
+              sha256: asset.name === "manifest.json" && state.digest
+                ? state.digest
+                : await sha256(bytes(join(root, asset.name))),
+            },
+          }))),
+        ],
+      },
+    },
+  }));
 } else {
   throw new Error("Unexpected release operation: " + operation);
 }
