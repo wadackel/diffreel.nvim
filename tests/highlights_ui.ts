@@ -26,6 +26,7 @@ async function eventually<T>(nvim: Nvim, check: () => T, timeout = 10) {
   for (;;) {
     try {
       await flush(nvim);
+      flushed = undefined;
     } catch (error) {
       flushed = error;
     }
