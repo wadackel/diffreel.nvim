@@ -62,7 +62,7 @@ Native jobs expose separate binary-validation, Rust-test, Lua/Deno-test, and ins
 
 Rust dependency caches cover `daemon/target` and Cargo dependencies, excluding workspace crates and installed Cargo commands. The selected Rust toolchain, Cargo manifests/lockfiles, target, runner image, and native build script participate in cache selection. Toolchain selection occurs before restore. Deno's native and consumer jobs cache dependencies by job, OS/architecture, and a hash of `.deno-version`, `deno.json`, and `deno.lock`. A cache hit never skips a test or binary validation. The Nix static-check shell retains its own store cache.
 
-Only trusted main pushes and manual main workflow runs can publish. Publication is serialized per ID. All four executables and `manifest.json` are uploaded and verified while the release is a draft, then published as an exact-ID prerelease. Completed releases remain immutable; UI-only changes reuse them. Old release IDs remain available for pinned plugins and rollback.
+Only trusted main pushes and manual main workflow runs can publish. Publication is serialized per ID. All four executables and `manifest.json` are uploaded and verified while the release is a draft, then published as an exact-ID prerelease. Immutability is enforced at the repository level: a published release can never be repaired, and its tag name can never be reused even after deletion, so a bad publication for a build ID can only be superseded by changing a build input to mint a new ID. Every published release the workflow touches — on publication, on reuse, and on each native job's fetch — must report as immutable and carry a GitHub-signed release attestation whose attested commit and asset digests match the validated manifest. Check a release by hand with `gh release verify daemon-<build ID> --repo wadackel/diffreel.nvim` (GitHub CLI 2.81.0 or later). UI-only changes reuse completed releases, and old release IDs remain available for pinned plugins and rollback.
 
 Post-publication [consumer tests](../tests/consumer.ts) install through lazy.nvim and `vim.pack` at the workflow's tested commit SHA. A Deno parent drives Neovim with an isolated runtime-only PATH that excludes gh, Deno, Python, Cargo, rustc, and Nix. The tests cover anonymous downloads, cache reuse, review updates, draft preservation, and close. The editor receives an allowlisted environment with isolated HOME/XDG directories, no authentication tokens, and system/global Git configuration disabled. These tests do not prepend the development checkout to runtimepath.
 
@@ -133,7 +133,7 @@ DIFFREEL_EXPECTED_ID="$(nvim --headless -u NONE -i NONE -l scripts/build-id.lua)
 deno run --frozen -A tests/consumer.ts
 ```
 
-Local HTTP fixtures verify transport and lifecycle behavior; the consumer jobs verify actual GitHub delivery. Maintainer release operations use GitHub CLI authentication, while end-user installation does not. The release lifecycle tests use a local GitHub CLI fixture to cover initial publication, interrupted drafts, and immutable release reuse.
+Local HTTP fixtures verify transport and lifecycle behavior; the consumer jobs verify actual GitHub delivery. Maintainer release operations use GitHub CLI authentication, while end-user installation does not. The release lifecycle tests use a local GitHub CLI fixture to cover initial publication, interrupted drafts, immutable release reuse, and rejection of a mutable or mis-attested release.
 
 ## Performance measurement
 
