@@ -117,6 +117,14 @@ test("a ticket captured without a comparison stays current until one appears", f
   end)
 end)
 
+test("unknown scopes are rejected when captured", function()
+  with_view(function(view)
+    local lifetime = require("diffreel.lifetime")
+    local ok, err = pcall(lifetime.ticket, view, "selectoin")
+    assert(not ok and tostring(err):find("unknown lifetime scope", 1, true), tostring(err))
+  end)
+end)
+
 test("an invalid view is never current", function()
   with_view(function(view)
     local lifetime = require("diffreel.lifetime")

@@ -48,6 +48,9 @@ function M.current(view, ticket)
   if manager ~= ticket.manager or (manager and manager.session_id) ~= ticket.session_id then
     return false
   end
+  if ticket.scope == "manager" then
+    return true
+  end
   if ticket.scope == "comparison" then
     return view.compare_seq == ticket.compare_seq
   end
@@ -55,7 +58,7 @@ function M.current(view, ticket)
     return view.selection_seq == ticket.selection_seq
       and (view.comparison and view.comparison.comparison_id) == ticket.comparison_id
   end
-  return true
+  error("diffreel: unknown lifetime scope " .. tostring(ticket.scope))
 end
 
 return M

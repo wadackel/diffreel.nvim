@@ -203,8 +203,9 @@ cleanup. Shutdown rejects reentrant opens until all owned resources are released
 ## Diff layouts and inline projection
 
 [windows.lua](../lua/diffreel/windows.lua) distinguishes visible panes, native
-diff engines, and all owned windows from the view record alone, so presentation,
-hunk queries and layout can share those roles without requiring each other.
+diff engines, all owned windows and a visible explorer from the view record
+alone, so presentation, hunk queries, layout and lifetime checks can share those
+roles without requiring each other.
 [layout.lua](../lua/diffreel/layout.lua) owns split ratios, staging engines and
 the transitions between layouts. Side-by-side and stacked use two visible
 native diff windows. Inline retains the visible real right buffer with
