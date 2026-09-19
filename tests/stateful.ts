@@ -375,7 +375,7 @@ export async function run(seed: number, steps: number, output: string) {
         );
         assert(
           await nvim.lua(
-            "for _,win in ipairs(require('diffreel.layout').owned_windows(view)) do if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_tabpage(win)~=view.tab then return false end end;return true",
+            "for _,win in ipairs(require('diffreel.windows').owned_windows(view)) do if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_tabpage(win)~=view.tab then return false end end;return true",
           ),
           String("Invalid owned window"),
         );

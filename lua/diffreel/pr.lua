@@ -1,4 +1,5 @@
 local explorer = require("diffreel.explorer")
+local install = require("diffreel.install")
 local M = {}
 local clears = {}
 
@@ -240,7 +241,7 @@ function M.clear(config, root, done)
     clears[state] = nil
     done(err, value)
   end
-  state.cancel = require("diffreel.install").ensure(config, function(err, prepared)
+  state.cancel = install.ensure(config, function(err, prepared)
     if not clears[state] then
       return
     end

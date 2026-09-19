@@ -16,6 +16,7 @@ local full_name = require("diffreel.full_name")
 local hunks = require("diffreel.hunks")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
+local windows = require("diffreel.windows")
 local inline = require("diffreel.inline")
 local ui = require("diffreel.ui")
 local M = { views = {}, managers = {}, config = { backend = "rust", watch = true, auto_install = true }, sequence = 0 }
@@ -39,7 +40,7 @@ local function valid(view)
   if not view.alive or not vim.api.nvim_tabpage_is_valid(view.tab) then
     return false
   end
-  for _, win in ipairs(layout.owned_windows(view)) do
+  for _, win in ipairs(windows.owned_windows(view)) do
     if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_tabpage(win) ~= view.tab then
       return false
     end
@@ -137,7 +138,7 @@ end
 function M.get_current()
   local win = vim.api.nvim_get_current_win()
   for _, view in pairs(M.views) do
-    if valid(view) and layout.visible_pane(view, win) then
+    if valid(view) and windows.visible_pane(view, win) then
       return view
     end
   end
@@ -935,7 +936,7 @@ local function select(view, path, reveal, prepared)
     end
     view.right_buf = buf
     release_right(view, previous)
-    for _, win in ipairs(layout.engine_windows(view)) do
+    for _, win in ipairs(windows.engine_windows(view)) do
       if not current() then
         return
       end
@@ -1002,7 +1003,7 @@ local function select(view, path, reveal, prepared)
         return
       end
       if plain then
-        pcall(vim.api.nvim_win_call, layout.engine(view, view.right_win), function()
+        pcall(vim.api.nvim_win_call, windows.engine(view, view.right_win), function()
           vim.cmd("diffupdate")
         end)
       end
@@ -1229,7 +1230,7 @@ local function receive(view, snapshot, prepared)
     local previous_buf = view.right_buf
     view.right_buf = view.empty_buf
     set_right_buffer(view, view.empty_buf)
-    for _, win in ipairs(layout.engine_windows(view)) do
+    for _, win in ipairs(windows.engine_windows(view)) do
       vim.api.nvim_win_call(win, function()
         presentation.diffoff(view, win)
       end)
@@ -1828,7 +1829,7 @@ rebuild_inline = function(view)
     return
   end
   inline.clear(view)
-  inline.compute(view, layout.engine_windows(view), valid, function(err, cache, stale)
+  inline.compute(view, windows.engine_windows(view), valid, function(err, cache, stale)
     if not valid(view) or view.layout ~= "inline" then
       return
     end
@@ -2262,7 +2263,7 @@ local function dispose(view)
   cleanup(function()
     popup.close(view, "path_popup")
   end)
-  for _, win in ipairs(layout.engine_windows(view)) do
+  for _, win in ipairs(windows.engine_windows(view)) do
     if vim.api.nvim_win_is_valid(win) then
       local buf = vim.api.nvim_win_get_buf(win)
       if buf == view.left_buf or buf == view.empty_buf or buf == view.right_buf then
@@ -2583,10 +2584,10 @@ function M.setup(opts)
     callback = function(event)
       local win = tonumber(event.match)
       for _, view in pairs(M.views) do
-        if not view.layout_changing and vim.tbl_contains(layout.owned_windows(view), win) then
+        if not view.layout_changing and vim.tbl_contains(windows.owned_windows(view), win) then
           inline.clear(view)
           view.layout_pending = nil
-          for _, pane in ipairs(layout.owned_windows(view)) do
+          for _, pane in ipairs(windows.owned_windows(view)) do
             if vim.api.nvim_win_is_valid(pane) then
               local copied = view.presentation and vim.deepcopy(view.presentation[pane])
               pcall(presentation.diffoff, view, pane)
@@ -2781,7 +2782,7 @@ function M.setup(opts)
                 view.navigation = true
                 inline.clear(view)
                 view.pending_hunk = nil
-                for _, win in ipairs(layout.engine_windows(view)) do
+                for _, win in ipairs(windows.engine_windows(view)) do
                   pcall(vim.api.nvim_win_call, win, function()
                     presentation.diffoff(view, win)
                   end)

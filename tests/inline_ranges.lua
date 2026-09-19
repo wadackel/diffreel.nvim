@@ -2,6 +2,7 @@ vim.opt.rtp:prepend(vim.fn.getcwd())
 local inline = require("diffreel.inline")
 local layout = require("diffreel.layout")
 local presentation = require("diffreel.presentation")
+local windows = require("diffreel.windows")
 local api = vim.api
 local failures, passed = {}, 0
 math.randomseed(41207)
@@ -36,7 +37,7 @@ local function run(flags, left, right)
     end
     layout.apply(v, "inline")
     local done, failure, cache
-    inline.compute(v, layout.engine_windows(v), function()
+    inline.compute(v, windows.engine_windows(v), function()
       return v.alive
     end, function(e, result)
       done, failure, cache = true, e, result
@@ -45,7 +46,7 @@ local function run(flags, left, right)
       return done
     end, 1))
     assert(not failure, failure)
-    for side, win in ipairs(layout.engine_windows(v)) do
+    for side, win in ipairs(windows.engine_windows(v)) do
       api.nvim_win_call(win, function()
         for row = 1, api.nvim_buf_line_count(0) do
           assert(
