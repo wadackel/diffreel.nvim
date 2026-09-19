@@ -1,5 +1,3 @@
-vim.opt.rtp:prepend(vim.fn.getcwd())
-
 local failures, passed = {}, 0
 local function test(name, fn)
   local ok, err = xpcall(fn, debug.traceback)
