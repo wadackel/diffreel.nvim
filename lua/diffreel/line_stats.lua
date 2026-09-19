@@ -1,4 +1,5 @@
 local lifetime = require("diffreel.lifetime")
+local phase = require("diffreel.phase")
 local M = {}
 local empty = {}
 
@@ -30,9 +31,7 @@ function M.start(view, render)
   if
     not view.line_stats
     or not lifetime.valid(view)
-    or not view.ready
-    or view.updating
-    or view.error
+    or not phase.settled(view)
     or not view.comparison
     or not view.manager
     or view.manager.backend.closed

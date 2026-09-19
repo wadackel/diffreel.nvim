@@ -18,6 +18,7 @@ local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
 local windows = require("diffreel.windows")
 local lifetime = require("diffreel.lifetime")
+local phase = require("diffreel.phase")
 local inline = require("diffreel.inline")
 local ui = require("diffreel.ui")
 local M = { views = {}, managers = {}, config = { backend = "rust", watch = true, auto_install = true }, sequence = 0 }
@@ -540,7 +541,7 @@ local function current_buffer_view(buf)
 end
 
 local function ready(view)
-  if valid(view) and view.ready and not view.updating and not view.error then
+  if valid(view) and phase.settled(view) then
     if view.requested_layout and view.requested_layout ~= view.layout then
       M.set_layout(view, view.requested_layout)
       return
@@ -560,7 +561,7 @@ local function ready(view)
     if continue_hunk then
       continue_hunk(view)
     end
-    if not valid(view) or not view.ready or view.selection_pending then
+    if not valid(view) or not phase.selected(view) then
       return
     end
     line_stats.start(view, render)
@@ -663,8 +664,7 @@ end
 local function sync_buffer_state(view)
   if
     not valid(view)
-    or not view.ready
-    or view.selection_pending
+    or not phase.selected(view)
     or not view.comparison
     or vim.api.nvim_win_get_buf(view.right_win) ~= view.right_buf
   then
@@ -804,12 +804,12 @@ local function select(view, path, reveal, prepared)
   local ticket = lifetime.ticket(view, "selection")
   local comparison_id = ticket.comparison_id
   local expected_buffer = vim.api.nvim_win_get_buf(view.right_win)
-  view.navigation = false
   if reveal then
     view.reveal_path = path
     explorer.reveal(view.collapsed, path)
   end
-  view.selected_path, view.ready, view.selection_pending = path, false, true
+  view.selected_path = path
+  phase.enter(view, "selecting")
   local left, right
   local function current()
     return lifetime.current(view, ticket)
@@ -819,7 +819,7 @@ local function select(view, path, reveal, prepared)
   end
   local function fail(error)
     if current() then
-      view.error, view.selection_pending = tostring(error), false
+      phase.enter(view, "failed", tostring(error))
       view.pending_hunk = nil
       render(view)
     end
@@ -983,7 +983,7 @@ local function select(view, path, reveal, prepared)
           vim.cmd("diffupdate")
         end)
       end
-      view.ready, view.error, view.selection_pending = true, nil, false
+      phase.enter(view, "ready")
       sync_buffer_state(view)
       render(view)
       for _, side in ipairs({ "left", "right" }) do
@@ -1144,7 +1144,7 @@ local function receive(view, snapshot, prepared)
     and snapshot.error == view.comparison.error
     and snapshot.updating == view.updating
     and snapshot.error == view.error
-    and (view.ready or view.selection_pending)
+    and phase.has_content(view)
   then
     return
   end
@@ -1171,7 +1171,7 @@ local function receive(view, snapshot, prepared)
   view.tree = explorer.build(view.entries)
   view.entries = explorer.ordered(view.tree, view.explorer_options.mode)
   if view.right_buf and vim.api.nvim_win_get_buf(view.right_win) ~= view.right_buf then
-    view.navigation = true
+    phase.enter(view, "paused")
     render(view)
     return
   end
@@ -1190,17 +1190,13 @@ local function receive(view, snapshot, prepared)
   end
   if
     selected
-    and (
-      selected.buffer_only
-      or not previous
-      or not vim.deep_equal(previous, selected)
-      or (not view.ready and not view.selection_pending)
-    )
+    and (selected.buffer_only or not previous or not vim.deep_equal(previous, selected) or not phase.has_content(view))
   then
     select(view, selected.path, false, prepared)
   elseif not selected then
     view.selection_seq = view.selection_seq + 1
-    view.selected_path, view.ready, view.selection_pending = nil, true, false
+    view.selected_path = nil
+    phase.enter(view, "empty")
     view.positioned_path = nil
     view.disk_conflict = false
     local previous_buf = view.right_buf
@@ -1236,7 +1232,7 @@ local function open_comparison(view)
   view.compare_seq = view.compare_seq + 1
   view.pending_hunk = nil
   local ticket = lifetime.ticket(view, "comparison")
-  view.switching, view.updating = true, true
+  phase.enter(view, "switching")
   render(view)
   local spec = view.resolved_spec or view.spec
   view.manager.backend:request("comparison/open", {
@@ -1251,10 +1247,10 @@ local function open_comparison(view)
     if not lifetime.current(view, ticket) then
       return
     end
-    view.switching = false
+    phase.enter(view, "answered")
     if err then
       view.deferred_path = nil
-      view.error, view.updating = tostring(err), false
+      phase.enter(view, "stopped", tostring(err))
       render(view)
       return
     end
@@ -1267,7 +1263,7 @@ local function open_comparison(view)
       file = view.spec.file,
     }
     view.selection_seq = view.selection_seq + 1
-    view.ready, view.selection_pending = false, false
+    phase.enter(view, "received")
     view.manager.backend:request("view/update", {
       view_id = view.id,
       comparison_id = snapshot.comparison_id,
@@ -1285,7 +1281,8 @@ local function activate_pr(view, snapshot, metadata, prepared)
   view.pr = metadata
   view.spec.left, view.spec.right = metadata.merge_base, metadata.head
   view.resolved_spec = vim.deepcopy(view.spec)
-  view.comparison, view.ready, view.selection_pending, view.switching = nil, false, false, false
+  view.comparison = nil
+  phase.enter(view, "received")
   view.selected_path, view.deferred_path = prepared and prepared.path or nil, nil
   receive(view, snapshot, prepared)
 end
@@ -1384,7 +1381,7 @@ local function get_manager(view, callback)
               render(view)
             elseif method == "backend/error" then
               pr.cancel(view)
-              view.error, view.updating = params.message, false
+              phase.enter(view, "stopped", params.message)
               render(view)
             end
           end
@@ -1589,7 +1586,7 @@ function M.open(opts)
       return
     end
     if err then
-      view.error, view.updating = tostring(err), false
+      phase.enter(view, "stopped", tostring(err))
       render(view)
     else
       view.manager = manager
@@ -1759,7 +1756,7 @@ function M.set_layout(view, mode)
     if err then
       layout.clear_staging(view)
       if stale then
-        if view.ready and not view.selection_pending then
+        if phase.selected(view) then
           M.set_layout(view, mode)
         else
           view.requested_layout = mode
@@ -1794,14 +1791,7 @@ function M.cycle_layout(view)
 end
 
 rebuild_inline = function(view)
-  if
-    not valid(view)
-    or view.layout ~= "inline"
-    or not view.ready
-    or view.selection_pending
-    or view.navigation
-    or view.layout_changing
-  then
+  if not valid(view) or view.layout ~= "inline" or not phase.interactive(view) or view.layout_changing then
     return
   end
   inline.clear(view)
@@ -1933,7 +1923,7 @@ function M.next_file(view, amount)
   index = math.max(1, math.min(#view.entries, index + (amount or 1)))
   if
     view.entries[index].path == view.selected_path
-    and (view.ready or view.selection_pending)
+    and phase.has_content(view)
     and not view.error
     and not view.navigation
   then
@@ -2008,7 +1998,7 @@ continue_hunk = function(view)
     view.pending_hunk = nil
     return
   end
-  if not view.ready or view.updating or view.error then
+  if not phase.settled(view) then
     return
   end
   local function land(row)
@@ -2063,15 +2053,7 @@ end
 
 function M.next_hunk(view, amount)
   view = view or M.get_current()
-  if
-    not view
-    or not valid(view)
-    or not view.ready
-    or view.updating
-    or view.error
-    or view.navigation
-    or not view.selected_path
-  then
+  if not view or not valid(view) or not phase.settled(view) or view.navigation or not view.selected_path then
     return
   end
   amount = amount or 1
@@ -2115,7 +2097,7 @@ function M.refresh(view)
   if not view or not valid(view) then
     return
   end
-  view.updating, view.error = true, nil
+  phase.enter(view, "retrying")
   render(view)
   if view.pr_target then
     pr.cancel(view)
@@ -2128,7 +2110,7 @@ function M.refresh(view)
       end
       if err then
         view.pr_recovery = nil
-        view.error, view.updating = tostring(err), false
+        phase.enter(view, "stopped", tostring(err))
         render(view)
         return
       end
@@ -2144,7 +2126,7 @@ function M.refresh(view)
             end
             if restore_error then
               view.pr_recovery = nil
-              view.error, view.updating = tostring(restore_error), false
+              phase.enter(view, "stopped", tostring(restore_error))
               render(view)
             else
               view.comparison = snapshot
@@ -2164,7 +2146,7 @@ function M.refresh(view)
         return
       end
       if err then
-        view.error, view.updating = tostring(err), false
+        phase.enter(view, "stopped", tostring(err))
         render(view)
       else
         view.manager = manager
@@ -2183,7 +2165,7 @@ function M.refresh(view)
           return
         end
         if err then
-          view.error, view.updating = tostring(err), false
+          phase.enter(view, "stopped", tostring(err))
           render(view)
         elseif view.comparison.comparison_id == snapshot.comparison_id then
           receive(view, snapshot)
@@ -2197,11 +2179,11 @@ local function dispose(view)
   if not view.alive then
     return
   end
-  view.closing = true
+  phase.enter(view, "closing")
   inline.dispose(view)
   pr.cancel(view)
   leave(view)
-  view.alive = false
+  phase.enter(view, "disposed")
   view.pending_hunk, view.deferred_path = nil, nil
   M.views[view.id] = nil
   local pending = view.pending_manager
@@ -2295,14 +2277,14 @@ function M.close(view)
   if not view or not view.alive or view.closing then
     return
   end
-  view.closing = true
+  phase.enter(view, "closing")
   local temporary = vim.tbl_contains(vim.api.nvim_list_wins(), function(win)
     return vim.fn.win_gettype(win) == "autocmd"
   end, { predicate = true })
   if buffer_operations > 0 or view.layout_changing or temporary then
     -- Changing focus does not unwind a temporary loading window or an active buffer assignment.
     vim.defer_fn(function()
-      view.closing = false
+      phase.enter(view, "reopened")
       M.close(view)
     end, 1)
     return
@@ -2749,7 +2731,7 @@ function M.setup(opts)
           if valid(view) and view.comparison and not view.switching then
             if vim.api.nvim_win_get_buf(view.right_win) ~= view.right_buf then
               if not view.navigation then
-                view.navigation = true
+                phase.enter(view, "paused")
                 inline.clear(view)
                 view.pending_hunk = nil
                 for _, win in ipairs(windows.engine_windows(view)) do
@@ -2762,7 +2744,7 @@ function M.setup(opts)
                 render(view)
               end
             elseif view.navigation then
-              view.navigation, view.ready, view.selection_pending = false, false, false
+              phase.enter(view, "resumed")
               receive(view, view.comparison)
             end
           end

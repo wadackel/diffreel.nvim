@@ -13,6 +13,7 @@ local scenarios = {
   "focus-watch",
   "focus-nowatch",
   "focus-closed",
+  "stopped-pending",
 }
 for _, scenario in ipairs(scenarios) do
   local root = vim.fn.tempname()
@@ -72,6 +73,33 @@ for _, scenario in ipairs(scenarios) do
       callback(nil, require("diffreel.content").decode("return 1\n", "100644"))
       backend.request = request
       assert(vim.api.nvim_win_get_buf(view.right_win) == target, "Delayed response stole navigation")
+    elseif scenario == "stopped-pending" then
+      local backend, callback = view.manager.backend, nil
+      local request = backend.request
+      backend.request = function(self, method, params, done)
+        if method == "blob/read" then
+          callback = done
+        else
+          request(self, method, params, done)
+        end
+      end
+      plugin.select(view, "main.lua")
+      assert(callback and view.selection_pending)
+      local sequence = view.selection_seq
+      backend.notify("backend/error", { message = "daemon exited" })
+      assert(view.error == "daemon exited" and not view.updating and view.selection_pending)
+      local duplicate = vim.deepcopy(view.comparison)
+      duplicate.updating, duplicate.error = false, "daemon exited"
+      backend.notify("comparison/updated", duplicate)
+      assert(view.selection_seq == sequence and view.selection_pending, "A duplicate snapshot restarted the selection")
+      backend.request = request
+      callback(nil, require("diffreel.content").decode("return 1\n", "100644"))
+      assert(
+        vim.wait(5000, function()
+          return view.ready and not view.selection_pending and view.error == nil
+        end, 5),
+        "The held selection did not land after the error"
+      )
     elseif scenario == "reload" then
       view.by_path["main.lua"].right.content_id = "stale"
       plugin.select(view, "main.lua")
