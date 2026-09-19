@@ -17,6 +17,7 @@ test("statistics yield between pages and ignore obsolete requests", function()
       requests[#requests + 1] = { method = method, params = params, callback = callback }
     end,
   }
+  local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
   local view = {
     alive = true,
     ready = true,
@@ -24,19 +25,23 @@ test("statistics yield between pages and ignore obsolete requests", function()
     compare_seq = 1,
     manager = { backend = backend, session_id = "session" },
     comparison = { comparison_id = "one", generation = 1 },
+    tab = vim.api.nvim_get_current_tabpage(),
+    left_win = win,
+    left_buf = buf,
+    explorer_buf = buf,
+    empty_buf = buf,
+    explorer_options = { visible = false },
   }
-  local function valid(v)
-    return v.alive
-  end
+  assert(require("diffreel.lifetime").valid(view), "fake view must satisfy lifetime.valid")
   local function render()
     renders = renders + 1
   end
-  stats.start(view, valid, render)
+  stats.start(view, render)
   assert(not view.statistics and #requests == 0)
   view.line_stats = true
-  stats.start(view, valid, render)
+  stats.start(view, render)
   assert(#requests == 0, "Stats blocked the content-ready callback")
-  stats.start(view, valid, render)
+  stats.start(view, render)
   assert(vim.wait(1000, function()
     return #requests == 1
   end, 5))
@@ -63,11 +68,11 @@ test("statistics yield between pages and ignore obsolete requests", function()
   })
   assert(view.statistics.complete and view.statistics.additions == 2 and view.statistics.deletions == 1)
   assert(view.statistics.unavailable == 1)
-  stats.start(view, valid, render)
+  stats.start(view, render)
   assert(#requests == 2, "Completed statistics restarted")
   view.comparison.generation = 2
   assert(not next(stats.files(view)), "Old-generation counts remained visible")
-  stats.start(view, valid, render)
+  stats.start(view, render)
   assert(vim.wait(1000, function()
     return #requests == 3
   end, 5))
@@ -84,7 +89,7 @@ test("statistics yield between pages and ignore obsolete requests", function()
   requests[3].callback("stats unavailable")
   assert(view.statistics.error and not view.error and view.ready)
   view.comparison.generation = 3
-  stats.start(view, valid, render)
+  stats.start(view, render)
   assert(vim.wait(1000, function()
     return #requests == 4
   end, 5))

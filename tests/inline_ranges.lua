@@ -23,6 +23,8 @@ local function run(flags, left, right)
     left_buf = lb,
     right_buf = rb,
     empty_buf = rb,
+    explorer_buf = lb,
+    explorer_options = { visible = false },
     left_win = lw,
     right_win = rw,
     selected_path = "file",
@@ -30,6 +32,7 @@ local function run(flags, left, right)
     by_path = { file = { left = { kind = "text", size = 10 }, right = { kind = "text", size = 10 } } },
   }
   local ok, err = xpcall(function()
+    assert(require("diffreel.lifetime").valid(v), "fake view must satisfy lifetime.valid")
     for _, win in ipairs({ lw, rw }) do
       api.nvim_win_call(win, function()
         vim.cmd.diffthis()
@@ -37,9 +40,7 @@ local function run(flags, left, right)
     end
     layout.apply(v, "inline")
     local done, failure, cache
-    inline.compute(v, windows.engine_windows(v), function()
-      return v.alive
-    end, function(e, result)
+    inline.compute(v, windows.engine_windows(v), function(e, result)
       done, failure, cache = true, e, result
     end)
     assert(vim.wait(5000, function()

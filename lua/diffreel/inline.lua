@@ -1,3 +1,4 @@
+local lifetime = require("diffreel.lifetime")
 local M = {}
 local pool, windows = {}, {}
 local capability_namespace
@@ -214,7 +215,7 @@ local function expand_tabs(chunks, win, checkpoint)
   end
 end
 
-function M.compute(view, engines, valid, done)
+function M.compute(view, engines, done)
   view.inline_task = {}
   local task, key = view.inline_task, fingerprint(view)
   local positions = {}
@@ -237,7 +238,7 @@ function M.compute(view, engines, valid, done)
   end
   view.inline_pending = true
   local function current()
-    if view.inline_task ~= task or not valid(view) or view.navigation then
+    if view.inline_task ~= task or not lifetime.valid(view) or view.navigation then
       return false
     end
     for _, win in ipairs(engines) do

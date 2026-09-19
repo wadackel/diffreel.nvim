@@ -44,7 +44,7 @@ Protocol 4 exchanges include `initialize`, `comparison/open`, `comparison/list`,
 
 `comparison/file` accepts a comparison ID and literal relative path, returning endpoint metadata without changing comparison membership. Commit and index endpoints use the comparison's captured state; the worktree side is inspected currently. Retained drafts use it when their path leaves Git's change list. It reads ignored worktree files for disk-state comparison while normal discovery still excludes them. Its responses use the same selection, comparison, session, and view-lifetime guards as blob reads.
 
-The UI routes notifications only to views using the originating manager and comparison. `receive()` rejects older generations. Selection callbacks check view validity, selection sequence, comparison ID, session, and navigation state. Opening a comparison uses a separate sequence. Keep checks where results are applied: cancellation or a successful RPC response does not prove the target view is current.
+The UI routes notifications only to views using the originating manager and comparison. `receive()` rejects older generations. Selection callbacks check view validity, selection sequence, comparison ID, session, and navigation state. Opening a comparison uses a separate sequence. [lifetime.lua](../lua/diffreel/lifetime.lua) names that guard as a ticket: `ticket(view, scope)` captures the manager, its session and the sequences a result belongs to, and `current(view, ticket)` re-checks them with `valid(view)` where the result is applied. The `manager` scope compares the manager and session, `comparison` adds the comparison sequence, and `selection` adds the comparison ID and selection sequence without the comparison sequence, because a failed comparison open must not strand a selection that was already in flight. Temporary states such as `closing`, `switching`, `navigation` and a closed backend stay explicit at the call site. Keep checks where results are applied: cancellation or a successful RPC response does not prove the target view is current.
 
 Duplicate snapshots do not restart a ready or pending selection. Snapshot generation alone is insufficient for this check: a repeated failure can finish a new progress interval without changing generation or error text. Retry and navigation return can re-apply the latest snapshot. Repeated file navigation at an unchanged endpoint also avoids new content requests.
 
@@ -203,8 +203,9 @@ cleanup. Shutdown rejects reentrant opens until all owned resources are released
 ## Diff layouts and inline projection
 
 [windows.lua](../lua/diffreel/windows.lua) distinguishes visible panes, native
-diff engines, and all owned windows from the view record alone, so presentation,
-hunk queries and layout can share those roles without requiring each other.
+diff engines, all owned windows and a visible explorer from the view record
+alone, so presentation, hunk queries, layout and lifetime checks can share those
+roles without requiring each other.
 [layout.lua](../lua/diffreel/layout.lua) owns split ratios, staging engines and
 the transitions between layouts. Side-by-side and stacked use two visible
 native diff windows. Inline retains the visible real right buffer with

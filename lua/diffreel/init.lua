@@ -17,6 +17,7 @@ local hunks = require("diffreel.hunks")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
 local windows = require("diffreel.windows")
+local lifetime = require("diffreel.lifetime")
 local inline = require("diffreel.inline")
 local ui = require("diffreel.ui")
 local M = { views = {}, managers = {}, config = { backend = "rust", watch = true, auto_install = true }, sequence = 0 }
@@ -36,29 +37,7 @@ local function with_buffer_operation(action)
   end
 end
 
-local function valid(view)
-  if not view.alive or not vim.api.nvim_tabpage_is_valid(view.tab) then
-    return false
-  end
-  for _, win in ipairs(windows.owned_windows(view)) do
-    if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_tabpage(win) ~= view.tab then
-      return false
-    end
-  end
-  if not view.layout_changing then
-    if not view.explorer_options or view.explorer_options.visible then
-      if not panel.visible(view) or vim.api.nvim_win_get_buf(view.explorer_win) ~= view.explorer_buf then
-        return false
-      end
-    elseif view.explorer_win ~= nil then
-      return false
-    end
-  end
-  return vim.api.nvim_buf_is_valid(view.explorer_buf)
-    and vim.api.nvim_buf_is_valid(view.left_buf)
-    and vim.api.nvim_buf_is_valid(view.empty_buf)
-    and vim.api.nvim_win_get_buf(view.left_win) == view.left_buf
-end
+local valid = lifetime.valid
 
 local function emit(view, name, details)
   local comparison = view.comparison
@@ -287,7 +266,7 @@ local function render(view, cursor_path, frame_only)
   if view.layout_changing then
     return
   end
-  if not panel.visible(view) then
+  if not windows.explorer_visible(view) then
     refresh_headers(view)
     return
   end
@@ -584,7 +563,7 @@ local function ready(view)
     if not valid(view) or not view.ready or view.selection_pending then
       return
     end
-    line_stats.start(view, valid, render)
+    line_stats.start(view, render)
   end
 end
 
@@ -822,8 +801,8 @@ local function select(view, path, reveal, prepared)
   view.initial_selection_done = true
   view.deferred_path = nil
   view.selection_seq = view.selection_seq + 1
-  local sequence, comparison_id = view.selection_seq, view.comparison.comparison_id
-  local session_id = view.manager.session_id
+  local ticket = lifetime.ticket(view, "selection")
+  local comparison_id = ticket.comparison_id
   local expected_buffer = vim.api.nvim_win_get_buf(view.right_win)
   view.navigation = false
   if reveal then
@@ -833,11 +812,8 @@ local function select(view, path, reveal, prepared)
   view.selected_path, view.ready, view.selection_pending = path, false, true
   local left, right
   local function current()
-    return valid(view)
+    return lifetime.current(view, ticket)
       and not view.closing
-      and view.selection_seq == sequence
-      and view.comparison.comparison_id == comparison_id
-      and view.manager.session_id == session_id
       and not view.switching
       and vim.api.nvim_win_get_buf(view.right_win) == expected_buffer
   end
@@ -1259,7 +1235,7 @@ local function open_comparison(view)
   end
   view.compare_seq = view.compare_seq + 1
   view.pending_hunk = nil
-  local sequence = view.compare_seq
+  local ticket = lifetime.ticket(view, "comparison")
   view.switching, view.updating = true, true
   render(view)
   local spec = view.resolved_spec or view.spec
@@ -1272,7 +1248,7 @@ local function open_comparison(view)
     file = spec.file,
     view_id = view.id,
   }, function(err, snapshot)
-    if not valid(view) or view.compare_seq ~= sequence then
+    if not lifetime.current(view, ticket) then
       return
     end
     view.switching = false
@@ -1618,7 +1594,7 @@ function M.open(opts)
     else
       view.manager = manager
       if view.pr_target then
-        pr.start(view, valid, render, activate_pr)
+        pr.start(view, render, activate_pr)
       else
         open_comparison(view)
       end
@@ -1638,8 +1614,8 @@ local function apply_explorer(view, next_options, settings, automatic)
   if automatic and not sizing then
     return
   end
-  local width = panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win)
-  local height = panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win)
+  local width = windows.explorer_visible(view) and vim.api.nvim_win_get_width(view.explorer_win)
+  local height = windows.explorer_visible(view) and vim.api.nvim_win_get_height(view.explorer_win)
   full_name.close(view)
   if not automatic then
     popup.close(view, "path_popup")
@@ -1660,8 +1636,8 @@ local function apply_explorer(view, next_options, settings, automatic)
     rebuild_inline(view)
   end
   local changed = not vim.deep_equal(previous, view.explorer_options)
-    or width ~= (panel.visible(view) and vim.api.nvim_win_get_width(view.explorer_win))
-    or height ~= (panel.visible(view) and vim.api.nvim_win_get_height(view.explorer_win))
+    or width ~= (windows.explorer_visible(view) and vim.api.nvim_win_get_width(view.explorer_win))
+    or height ~= (windows.explorer_visible(view) and vim.api.nvim_win_get_height(view.explorer_win))
   if changed and not automatic then
     emit(view, "LayoutChanged", { explorer = vim.deepcopy(view.explorer_options), layout = view.layout })
   end
@@ -1682,7 +1658,7 @@ end
 local function resize_explorer(view)
   if
     not valid(view)
-    or not panel.visible(view)
+    or not windows.explorer_visible(view)
     or vim.api.nvim_get_current_tabpage() ~= view.tab
     or view.layout_changing
   then
@@ -1775,7 +1751,7 @@ function M.set_layout(view, mode)
     view.layout_pending = nil
     error(engines, 0)
   end
-  inline.compute(view, engines, valid, function(err, cache, stale)
+  inline.compute(view, engines, function(err, cache, stale)
     if not valid(view) or view.layout_pending ~= token then
       return
     end
@@ -1829,7 +1805,7 @@ rebuild_inline = function(view)
     return
   end
   inline.clear(view)
-  inline.compute(view, windows.engine_windows(view), valid, function(err, cache, stale)
+  inline.compute(view, windows.engine_windows(view), function(err, cache, stale)
     if not valid(view) or view.layout ~= "inline" then
       return
     end
@@ -1856,15 +1832,15 @@ function M.toggle_explorer(view)
   if not view or not valid(view) then
     return
   end
-  if panel.visible(view) then
+  if windows.explorer_visible(view) then
     local focused = vim.api.nvim_get_current_win() == view.explorer_win
     M.set_explorer(view, { visible = false })
-    view.explorer_refocus = focused and not panel.visible(view) or nil
+    view.explorer_refocus = focused and not windows.explorer_visible(view) or nil
     return
   end
   local refocus = view.explorer_refocus
   M.set_explorer(view, { visible = true })
-  if refocus and valid(view) and panel.visible(view) and vim.api.nvim_get_current_tabpage() == view.tab then
+  if refocus and valid(view) and windows.explorer_visible(view) and vim.api.nvim_get_current_tabpage() == view.tab then
     vim.api.nvim_set_current_win(view.explorer_win)
   end
 end
@@ -1874,10 +1850,10 @@ function M.focus_explorer(view)
   if not view or not valid(view) then
     return
   end
-  if not panel.visible(view) then
+  if not windows.explorer_visible(view) then
     M.set_explorer(view, { visible = true })
   end
-  if valid(view) and panel.visible(view) then
+  if valid(view) and windows.explorer_visible(view) then
     vim.api.nvim_set_current_win(view.explorer_win)
   end
 end
@@ -1962,7 +1938,7 @@ function M.next_file(view, amount)
     and not view.navigation
   then
     local path = view.entries[index].path
-    local cursor = panel.visible(view)
+    local cursor = windows.explorer_visible(view)
       and view.rows
       and view.rows[vim.api.nvim_win_get_cursor(view.explorer_win)[1] - 3]
     if explorer.reveal(view.collapsed, path) or not cursor or cursor.path ~= path then
@@ -2024,12 +2000,8 @@ continue_hunk = function(view)
     return
   end
   if
-    not valid(view)
+    not lifetime.current(view, pending.ticket)
     or view.navigation
-    or view.manager ~= pending.manager
-    or view.manager.session_id ~= pending.session
-    or view.comparison.comparison_id ~= pending.comparison
-    or view.selection_seq ~= pending.sequence
     or view.selected_path ~= pending.path
     or vim.api.nvim_get_current_tabpage() ~= view.tab
   then
@@ -2082,7 +2054,7 @@ continue_hunk = function(view)
         break
       end
       select(view, path, true)
-      pending.sequence, pending.path = view.selection_seq, path
+      pending.ticket, pending.path = lifetime.ticket(view, "selection"), path
       return
     end
   end
@@ -2108,10 +2080,7 @@ function M.next_hunk(view, amount)
   end
   local win = hunk_window(view)
   view.pending_hunk = {
-    manager = view.manager,
-    session = view.manager.session_id,
-    comparison = view.comparison.comparison_id,
-    sequence = view.selection_seq,
+    ticket = lifetime.ticket(view, "selection"),
     path = view.selected_path,
     win = win,
     remaining = math.abs(amount),
@@ -2164,12 +2133,13 @@ function M.refresh(view)
         return
       end
       view.manager = manager
+      local ticket = lifetime.ticket(view, "manager")
       if previous ~= manager and view.pr then
         manager.backend:request(
           "pr/restore",
           { view_id = view.id, snapshot = view.pr, comparison = view.resolved_spec },
           function(restore_error, snapshot)
-            if not valid(view) or view.manager ~= manager or view.pr_recovery ~= recovery then
+            if not lifetime.current(view, ticket) or view.pr_recovery ~= recovery then
               return
             end
             if restore_error then
@@ -2178,12 +2148,12 @@ function M.refresh(view)
               render(view)
             else
               view.comparison = snapshot
-              pr.start(view, valid, render, activate_pr)
+              pr.start(view, render, activate_pr)
             end
           end
         )
       else
-        pr.start(view, valid, render, activate_pr)
+        pr.start(view, render, activate_pr)
       end
     end)
     return
@@ -2204,12 +2174,12 @@ function M.refresh(view)
   elseif not view.comparison then
     open_comparison(view)
   else
-    local manager, sequence = view.manager, view.compare_seq
+    local ticket = lifetime.ticket(view, "comparison")
     view.manager.backend:request(
       "comparison/refresh",
       { comparison_id = view.comparison.comparison_id },
       function(err, snapshot)
-        if not valid(view) or view.manager ~= manager or view.compare_seq ~= sequence then
+        if not lifetime.current(view, ticket) then
           return
         end
         if err then

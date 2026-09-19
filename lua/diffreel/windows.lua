@@ -29,6 +29,11 @@ function M.owned_windows(view)
   return wins
 end
 
+function M.explorer_visible(view)
+  local win = view.explorer_win
+  return win ~= nil and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == view.tab
+end
+
 function M.visible_pane(view, win)
   return win == view.right_win or (win == view.left_win and view.layout ~= "inline") or win == view.explorer_win
 end
