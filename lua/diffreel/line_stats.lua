@@ -1,3 +1,4 @@
+local lifetime = require("diffreel.lifetime")
 local M = {}
 local empty = {}
 
@@ -25,10 +26,10 @@ function M.files(view)
   return state and state.files or empty
 end
 
-function M.start(view, valid, render)
+function M.start(view, render)
   if
     not view.line_stats
-    or not valid(view)
+    or not lifetime.valid(view)
     or not view.ready
     or view.updating
     or view.error
@@ -55,7 +56,7 @@ function M.start(view, valid, render)
   }
   view.statistics = state
   local function current()
-    return valid(view) and view.statistics == state and M.current(view) == state and not manager.backend.closed
+    return lifetime.valid(view) and view.statistics == state and M.current(view) == state and not manager.backend.closed
   end
   local function redraw()
     if state.redraw_pending then

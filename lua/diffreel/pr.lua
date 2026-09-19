@@ -1,5 +1,6 @@
 local explorer = require("diffreel.explorer")
 local install = require("diffreel.install")
+local lifetime = require("diffreel.lifetime")
 local M = {}
 local clears = {}
 
@@ -36,18 +37,14 @@ function M.cancel(view)
   if state.job_id and not state.manager.backend.closed then
     state.manager.backend:request("pr/cancel", { job_id = state.job_id }, function() end)
   end
-  if state.rollback and state.valid(view) and view.manager == state.manager and not state.manager.backend.closed then
+  if state.rollback and lifetime.current(view, state.ticket) and not state.manager.backend.closed then
     state.manager.backend:request("view/update", state.rollback, function() end)
   end
   cleanup(state)
 end
 
 local function current(view, state)
-  return view.pr_request == state
-    and state.valid(view)
-    and view.manager == state.manager
-    and state.manager.session_id == state.session
-    and not state.manager.backend.closed
+  return view.pr_request == state and lifetime.current(view, state.ticket) and not state.manager.backend.closed
 end
 
 local function fail(view, state, err)
@@ -169,14 +166,14 @@ local function candidate(view, state, metadata)
   end)
 end
 
-function M.start(view, valid, render, activate)
+function M.start(view, render, activate)
   M.cancel(view)
   view.pr_sequence = (view.pr_sequence or 0) + 1
   local state = {
     sequence = view.pr_sequence,
     manager = view.manager,
     session = view.manager.session_id,
-    valid = valid,
+    ticket = lifetime.ticket(view, "manager"),
     render = render,
     activate = activate,
   }

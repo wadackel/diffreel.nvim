@@ -6,11 +6,6 @@ local options = require("diffreel.options")
 local directions = { left = "left", right = "right", top = "above", bottom = "below" }
 local resize_generation = 0
 
-function M.visible(view)
-  local win = view.explorer_win
-  return win ~= nil and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == view.tab
-end
-
 function M.windows(view)
   return windows.owned_windows(view)
 end
@@ -46,7 +41,7 @@ function M.prepare(view, settings, patch, automatic)
     return
   end
   local axis = M.axis(settings)
-  local shown = M.visible(view)
+  local shown = windows.explorer_visible(view)
   local saved = (view.explorer_sizes or {})[axis]
   if shown and axis == M.axis(view.explorer_options) then
     saved = axis == "width" and vim.api.nvim_win_get_width(view.explorer_win)
@@ -98,7 +93,7 @@ end
 function M.apply(view, settings, patch, sizing)
   patch = patch or {}
   local old, old_win = view.explorer_options, view.explorer_win
-  local shown = M.visible(view)
+  local shown = windows.explorer_visible(view)
   local focused = vim.api.nvim_get_current_win() == old_win
   local fraction = layout.ratio(view)
   local sizes = view.explorer_sizes or {}
@@ -169,7 +164,7 @@ function M.apply(view, settings, patch, sizing)
     end
     view.explorer_win = old_win and vim.api.nvim_win_is_valid(old_win) and old_win or nil
     view.explorer_options = vim.tbl_extend("force", old, { visible = view.explorer_win ~= nil })
-    if M.visible(view) then
+    if windows.explorer_visible(view) then
       pcall(vim.api.nvim_win_call, view.right_win, function()
         vim.api.nvim_win_set_config(old_win, { split = directions[old.position], win = -view.right_win })
         style(old_win, old.position)
@@ -177,7 +172,7 @@ function M.apply(view, settings, patch, sizing)
       end)
     end
   end
-  if focused and not M.visible(view) and vim.api.nvim_win_is_valid(view.right_win) then
+  if focused and not windows.explorer_visible(view) and vim.api.nvim_win_is_valid(view.right_win) then
     vim.api.nvim_set_current_win(view.right_win)
   end
   if not ok then

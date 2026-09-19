@@ -114,7 +114,7 @@ Use `just build` and the applicable rows below inside `nix develop`. All Lua fil
 | Daemon lifecycle, retry, stale startup | `startup.lua`, `crash.lua`, `ui_restart.lua`, `daemon_shutdown.ts`; stability `worker-crash`, `git-failure` |
 | Monitoring and comparison invalidation | `watcher.lua`, `regressions.lua`, `repository.lua`; stability `mixed-updates`, `multiple-comparisons`, `rename-reappear`, `ignore-change` |
 | Explorer hierarchy, folding, path copies | `tree_actions.lua`, `tree_display_cache.lua`, `tree_clipboard.lua`, `tree_clipboard_command.lua`, `tree_ui.lua`; stability `tree-navigation`; exploratory `tree-type-change` |
-| Commands, selection, tab/window lifecycle | `ui.lua`, `ui_edges.lua`, `ui_races.lua`, `exploration.lua`, `autocmd_lifecycle.lua`, `selection_viewport.lua`; stability `toggle`, `tree-navigation`, `rapid-selection`, `rapid-open-close`, `move-right-tab`, `move-clone-tab` |
+| Commands, selection, tab/window lifecycle | `ui.lua`, `ui_edges.lua`, `ui_races.lua`, `lifetime.lua`, `exploration.lua`, `autocmd_lifecycle.lua`, `selection_viewport.lua`; stability `toggle`, `tree-navigation`, `rapid-selection`, `rapid-open-close`, `move-right-tab`, `move-clone-tab` |
 | Comparison scopes, index, merge-base, preferred initial file | `options.lua`, `comparison_options.lua`, `initial_selection.lua`; Rust repository regressions, `repository.lua`, `watcher.lua`, `ui_restart.lua` |
 | Explorer list/compaction/placement, sizing and single-file mode | `explorer_layout.lua`, `layout_options.lua`, `panel_ui.lua`, `explorer_resize.ts`, `path_popup.lua`, `file_mode.lua`, `navigation_edges.lua`; Rust pinned-file tests |
 | Clipped explorer names and cursor-row overlays | `full_name_rows.lua`, `full_name_ui.ts`, `highlight_rows.lua`, `tree_display_cache.lua`, `path_popup.lua`, `cleanup_errors.lua` |
@@ -126,6 +126,7 @@ Use `just build` and the applicable rows below inside `nix develop`. All Lua fil
 | Real buffers, mappings, cleanup | `keymaps.lua`, `keymap_lease.lua`, `keymaps_ui.lua`, `cleanup_errors.lua`, `presentation.lua`, `ui_races.lua`, UI/LSP e2e; stability draft, save/undo, and navigation cases |
 | Diff layouts and inline projection | `diff_layout.lua`, `layout_edges.lua`, `inline_ranges.lua`, `inline_ui.ts`; existing presentation, lease, hunk, lifecycle and race suites |
 | Lua module boundaries and `require` order | `module_graph.lua`; the suites for every module whose requires moved |
+| Asynchronous result guards and view validity | `lifetime.lua`, `ui_races.lua`, `ui_restart.lua`, `crash.lua`, `line_stats.lua`, `inline_ranges.lua`; PR, hunk and stability race cases |
 | Presentation, folds, highlighting | `highlights.lua`, `highlight_rows.lua`, `highlights_ui.ts`, `presentation.lua`, `diff_display.lua`, `probe.lua`; `syntax-switch` with a Lua parser |
 | Installation and source identity | `distribution.lua`, `installer.lua`, `startup.lua`, `health.lua`, then `install_integration.ts` with a matching build ID |
 | Benchmark harness | `probe.lua`, `interaction_probe.lua`, `fixtures_test.ts`, `metrics_test.ts` on macOS; a small benchmark smoke run |
