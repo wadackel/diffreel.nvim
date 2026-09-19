@@ -1,9 +1,10 @@
 local M = {}
 local windows = require("diffreel.windows")
 local inline = require("diffreel.inline")
+local phase = require("diffreel.phase")
 
 local function prepared(view, win)
-  if not view.alive or not view.ready or view.selection_pending or view.navigation then
+  if not view.alive or not phase.interactive(view) then
     return false
   end
   if win ~= view.left_win and win ~= view.right_win then

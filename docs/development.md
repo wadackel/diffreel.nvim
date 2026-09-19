@@ -126,7 +126,7 @@ Use `just build` and the applicable rows below inside `nix develop`. All Lua fil
 | Real buffers, mappings, cleanup | `keymaps.lua`, `keymap_lease.lua`, `keymaps_ui.lua`, `cleanup_errors.lua`, `presentation.lua`, `ui_races.lua`, UI/LSP e2e; stability draft, save/undo, and navigation cases |
 | Diff layouts and inline projection | `diff_layout.lua`, `layout_edges.lua`, `inline_ranges.lua`, `inline_ui.ts`; existing presentation, lease, hunk, lifecycle and race suites |
 | Lua module boundaries and `require` order | `module_graph.lua`; the suites for every module whose requires moved |
-| Asynchronous result guards and view validity | `lifetime.lua`, `ui_races.lua`, `ui_restart.lua`, `crash.lua`, `line_stats.lua`, `inline_ranges.lua`; PR, hunk and stability race cases |
+| Asynchronous result guards and view validity | `lifetime.lua`, `phase.lua`, `ui_races.lua`, `ui_restart.lua`, `crash.lua`, `line_stats.lua`, `inline_ranges.lua`; PR, hunk and stability race cases |
 | Presentation, folds, highlighting | `highlights.lua`, `highlight_rows.lua`, `highlights_ui.ts`, `presentation.lua`, `diff_display.lua`, `probe.lua`; `syntax-switch` with a Lua parser |
 | Installation and source identity | `distribution.lua`, `installer.lua`, `startup.lua`, `health.lua`, then `install_integration.ts` with a matching build ID |
 | Benchmark harness | `probe.lua`, `interaction_probe.lua`, `fixtures_test.ts`, `metrics_test.ts` on macOS; a small benchmark smoke run |

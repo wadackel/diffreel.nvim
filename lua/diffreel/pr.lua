@@ -1,6 +1,7 @@
 local explorer = require("diffreel.explorer")
 local install = require("diffreel.install")
 local lifetime = require("diffreel.lifetime")
+local phase = require("diffreel.phase")
 local M = {}
 local clears = {}
 
@@ -33,7 +34,7 @@ function M.cancel(view)
   if not state then
     return
   end
-  view.pr_request, view.pr_loading = nil, false
+  view.pr_request = nil
   if state.job_id and not state.manager.backend.closed then
     state.manager.backend:request("pr/cancel", { job_id = state.job_id }, function() end)
   end
@@ -53,7 +54,7 @@ local function fail(view, state, err)
     return
   end
   M.cancel(view)
-  view.error, view.updating = tostring(err), false
+  phase.enter(view, "stopped", tostring(err))
   state.render(view)
 end
 
@@ -107,7 +108,7 @@ local function candidate(view, state, metadata)
             fail(view, state, update_error)
             return
           end
-          view.pr_request, view.pr_loading = nil, false
+          view.pr_request = nil
           cleanup(state)
           state.activate(view, snapshot, metadata, prepared)
         end)
@@ -177,8 +178,9 @@ function M.start(view, render, activate)
     render = render,
     activate = activate,
   }
-  view.pr_request, view.pr_loading = state, true
-  view.pending_hunk, view.error, view.updating = nil, nil, true
+  view.pr_request = state
+  view.pending_hunk = nil
+  phase.enter(view, "retrying")
   state.timer = vim.uv.new_timer()
   state.timer:start(
     125000,
