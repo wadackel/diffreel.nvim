@@ -23,7 +23,7 @@ local ui = require("diffreel.ui")
 local events = require("diffreel.events")
 local buffers = require("diffreel.buffers")
 local render_module = require("diffreel.render")
-local manager = require("diffreel.manager")
+local manager_module = require("diffreel.manager")
 local M = { views = {}, managers = {}, config = { backend = "rust", watch = true, auto_install = true }, sequence = 0 }
 local active_keymaps
 local continue_hunk
@@ -900,7 +900,7 @@ function M.open(opts)
   if not valid(view) then
     return view
   end
-  manager.get(M, view, notify, function(err, manager)
+  manager_module.get(M, view, notify, function(err, manager)
     if not valid(view) then
       return
     end
@@ -1423,7 +1423,7 @@ function M.refresh(view)
     local recovery = {}
     view.pr_recovery = recovery
     local previous = view.manager
-    manager.get(M, view, notify, function(err, manager)
+    manager_module.get(M, view, notify, function(err, manager)
       if not valid(view) or view.pr_recovery ~= recovery then
         return
       end
@@ -1460,7 +1460,7 @@ function M.refresh(view)
     return
   end
   if not view.manager or view.manager.backend.closed then
-    manager.get(M, view, notify, function(err, manager)
+    manager_module.get(M, view, notify, function(err, manager)
       if not valid(view) then
         return
       end
@@ -1515,7 +1515,7 @@ local function dispose(view)
       end
     end
     if not needed then
-      manager.cancel(M, pending)
+      manager_module.cancel(M, pending)
     end
   end
   local failures = {}
@@ -1659,8 +1659,8 @@ function M.shutdown()
   for _, view in pairs(vim.tbl_extend("force", {}, M.views)) do
     dispose(view)
   end
-  for _, active in pairs(M.managers) do
-    manager.cancel(M, active)
+  for _, manager in pairs(M.managers) do
+    manager_module.cancel(M, manager)
   end
   M.managers = {}
   pr.shutdown()

@@ -12,7 +12,7 @@ local function with_buffer_operation(action)
   end
 end
 
-function M.busy()
+local function busy()
   return buffer_operations > 0
 end
 
@@ -154,6 +154,6 @@ M.with_operation, M.owned_buffer, M.set_lines, M.put_virtual =
   with_buffer_operation, owned_buffer, set_lines, put_virtual
 M.release_right, M.buffer_hash, M.set_review_buffer, M.set_right_buffer =
   release_right, buffer_hash, set_review_buffer, set_right_buffer
-M.observe = observe_buffer
+M.observe, M.busy = observe_buffer, busy
 
 return M

@@ -1,6 +1,6 @@
 local lifetime = require("diffreel.lifetime")
-local valid = lifetime.valid
 local M = {}
+local valid = lifetime.valid
 
 local function emit(view, name, details)
   local comparison = view.comparison
