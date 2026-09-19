@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/wadackel/diffreel.nvim/compare/v0.1.0...v0.1.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* correct review headers, command errors and PR cache completion ([#23](https://github.com/wadackel/diffreel.nvim/issues/23)) ([1226345](https://github.com/wadackel/diffreel.nvim/commit/1226345e3eae8e404ceed5de3c5ecc618949282d))
+* return focus to the explorer when toggling it back ([#25](https://github.com/wadackel/diffreel.nvim/issues/25)) ([5c9c8e9](https://github.com/wadackel/diffreel.nvim/commit/5c9c8e9a1c78b921c5b52507df7794244795b1a4))
+
 ## 0.1.0 (2026-09-18)
 
 
