@@ -129,6 +129,7 @@ end
 
 local observed_buffers = {}
 local function observe_buffer(buf, on_change)
+  -- Only the first callback per buffer is kept; a later caller with a different callback would be dropped silently.
   if observed_buffers[buf] then
     return
   end

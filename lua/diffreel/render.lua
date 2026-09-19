@@ -75,6 +75,8 @@ local function activity(view)
   end
 end
 
+-- The review-wide label follows whichever owned pane sits top-right, rather than living in the
+-- explorer, which can be hidden or scrolled away while the review is still working.
 local function refresh_headers(view)
   local headers, target, corner = view.headers or {}, nil, nil
   for win, state in pairs(headers) do
@@ -351,7 +353,7 @@ local function render(view, cursor_path, frame_only)
 end
 
 local function loading(view)
-  -- A stopped review never animates: line_stats.start only runs from ready(), which
+  -- A stopped review never animates: line_stats.start only runs from init.lua's ready(), which
   -- requires no error, so a pending counter on an errored view would never resolve.
   if not valid(view) or view.closing or view.error then
     return false

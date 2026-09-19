@@ -89,8 +89,6 @@ function M.get_current()
   end
 end
 
--- The review-wide label follows whichever owned pane sits top-right, rather than living in the
--- explorer, which can be hidden or scrolled away while the review is still working.
 local function animate()
   local pending = false
   for _, view in pairs(M.views) do
