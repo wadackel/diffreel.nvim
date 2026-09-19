@@ -69,7 +69,15 @@ end
 
 test("plugin modules require each other without cycles", function()
   local graph = dependencies()
-  for _, name in ipairs({ "diffreel", "diffreel.layout", "diffreel.windows" }) do
+  for _, name in ipairs({
+    "diffreel",
+    "diffreel.layout",
+    "diffreel.windows",
+    "diffreel.render",
+    "diffreel.manager",
+    "diffreel.buffers",
+    "diffreel.events",
+  }) do
     assert(graph[name], "expected " .. name .. " in the module graph")
   end
   local cycle = find_cycle(graph)

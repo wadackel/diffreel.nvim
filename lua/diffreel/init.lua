@@ -4,7 +4,6 @@ local keymaps = require("diffreel.keymaps")
 local presentation = require("diffreel.presentation")
 local highlights = require("diffreel.highlights")
 local install = require("diffreel.install")
-local distribution = require("diffreel.distribution")
 local options = require("diffreel.options")
 local spinner = require("diffreel.spinner")
 local completion = require("diffreel.completion")
@@ -21,57 +20,22 @@ local lifetime = require("diffreel.lifetime")
 local phase = require("diffreel.phase")
 local inline = require("diffreel.inline")
 local ui = require("diffreel.ui")
+local events = require("diffreel.events")
+local buffers = require("diffreel.buffers")
+local render_module = require("diffreel.render")
+local manager_module = require("diffreel.manager")
 local M = { views = {}, managers = {}, config = { backend = "rust", watch = true, auto_install = true }, sequence = 0 }
-local namespace = vim.api.nvim_create_namespace("diffreel")
 local active_keymaps
 local continue_hunk
 local shutting_down = false
 local rebuild_inline
-local buffer_operations = 0
-
-local function with_buffer_operation(action)
-  buffer_operations = buffer_operations + 1
-  local ok, err = pcall(action)
-  buffer_operations = buffer_operations - 1
-  if not ok then
-    error(err, 0)
-  end
-end
-
 local valid = lifetime.valid
-
-local function emit(view, name, details)
-  local comparison = view.comparison
-  local data = vim.tbl_extend("force", {
-    view_id = view.id,
-    root = view.root,
-    path = view.selected_path,
-    comparison_id = comparison and comparison.comparison_id,
-    generation = comparison and comparison.generation,
-  }, details or {})
-  local ok, err =
-    pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "Diffreel" .. name, modeline = false, data = data })
-  if not ok then
-    vim.schedule(function()
-      vim.notify("diffreel: " .. name .. " hook failed: " .. tostring(err), vim.log.levels.ERROR)
-    end)
-  end
-end
-
-local function enter(view)
-  if view.opened and not view.entered and valid(view) and vim.api.nvim_get_current_tabpage() == view.tab then
-    view.entered = true
-    emit(view, "Enter")
-  end
-end
-
-local function leave(view)
-  view.pending_hunk = nil
-  if view.entered then
-    view.entered = false
-    emit(view, "Leave")
-  end
-end
+local emit, enter, leave = events.emit, events.enter, events.leave
+local with_buffer_operation, owned_buffer, set_lines, put_virtual =
+  buffers.with_operation, buffers.owned_buffer, buffers.set_lines, buffers.put_virtual
+local release_right, buffer_hash, set_review_buffer, set_right_buffer =
+  buffers.release_right, buffers.buffer_hash, buffers.set_review_buffer, buffers.set_right_buffer
+local render, loading, sync_buffer_state = render_module.render, render_module.loading, render_module.sync_buffer_state
 
 function M.get_view(id)
   local view = M.views[id]
@@ -122,378 +86,6 @@ function M.get_current()
       return view
     end
   end
-end
-
-local function owned_buffer(name, allocated)
-  local buf = vim.api.nvim_create_buf(false, true)
-  allocated[#allocated + 1] = buf
-  vim.api.nvim_buf_set_name(buf, name)
-  vim.bo[buf].buftype = "nofile"
-  vim.bo[buf].bufhidden = "hide"
-  vim.bo[buf].swapfile = false
-  vim.bo[buf].modifiable = false
-  return buf
-end
-
-local function set_lines(buf, lines)
-  vim.bo[buf].modifiable = true
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modified = false
-  vim.bo[buf].modifiable = false
-end
-
-local function title(view)
-  if view.pr then
-    return ui.label(
-      view.ui_icons,
-      "pull_request",
-      "PR #" .. view.pr.number .. " · " .. view.pr.state .. " · " .. explorer.display(view.pr.title)
-    )
-  elseif view.pr_target then
-    return ui.label(view.ui_icons, "pull_request", "PR " .. explorer.display(tostring(view.pr_target)))
-  end
-  local left = view.comparison and view.comparison.left or view.spec.left
-  local right = view.comparison and view.comparison.right or view.spec.right
-  local left_label = view.follow_head and ui.label(view.ui_icons, left == "" and "empty" or "commit", "HEAD")
-    or ui.endpoint(view.ui_icons, left, vim.fn.strcharpart(left, 0, 10))
-  return left_label .. " → " .. ui.endpoint(view.ui_icons, right, vim.fn.strcharpart(right, 0, 10))
-end
-
-local function format_label(side)
-  if side.reason then
-    return side.reason
-  elseif side.exists == false then
-    return ""
-  end
-  return (side.fileformat == "dos" and "CRLF" or "LF")
-    .. (side.bom and " · BOM" or "")
-    .. (side.endofline == false and " · no final newline" or "")
-end
-
-local function header_path(path)
-  local display = explorer.display(path):gsub("%%", "%%%%")
-  local directory, name = display:match("^(.*[/])([^/]*)$")
-  return " %<%#DiffreelDiffWinbarDirectory#"
-    .. (directory or "")
-    .. "%#DiffreelDiffWinbarPath#"
-    .. (name or display)
-    .. "%*"
-end
-
-local function activity(view)
-  if view.error then
-    return "Error", "R: retry"
-  elseif view.navigation then
-    return "Paused", ui.label(view.ui_icons, "paused", "Paused")
-  elseif not view.ready then
-    -- The pane's own Loading header already spins; a second indicator would only repeat it.
-    return
-  end
-  local group, text
-  if view.updating then
-    group, text = "", "Updating…"
-  elseif view.line_stats then
-    local stats = line_stats.current(view)
-    if not stats or stats.pending then
-      group, text = "", "Counting saved lines…"
-    end
-  end
-  if text then
-    return group, ui.prefix(spinner.frame() or ui.icon(view.ui_icons, "loading"), text)
-  end
-end
-
--- The review-wide label follows whichever owned pane sits top-right, rather than living in the
--- explorer, which can be hidden or scrolled away while the review is still working.
-local function refresh_headers(view)
-  local headers, target, corner = view.headers or {}, nil, nil
-  for win, state in pairs(headers) do
-    if
-      not vim.api.nvim_win_is_valid(win)
-      or vim.api.nvim_win_get_tabpage(win) ~= view.tab
-      or (state.value and vim.wo[win].winbar ~= state.value)
-    then
-      headers[win] = nil
-    elseif vim.api.nvim_win_get_config(win).relative == "" then
-      local position = vim.api.nvim_win_get_position(win)
-      local right = position[2] + vim.api.nvim_win_get_width(win)
-      if not corner or position[1] < corner[1] or (position[1] == corner[1] and right > corner[2]) then
-        target, corner = win, { position[1], right }
-      end
-    end
-  end
-  local group, label = activity(view)
-  for win, state in pairs(headers) do
-    local value = state.left .. "%=" .. (state.right or "")
-    if win == target and label then
-      -- A dim label between the path and the endpoint read as part of the header, so it takes
-      -- the far edge in a status color instead.
-      value = value .. "%#DiffreelActivity" .. group .. "# " .. ui.winbar(label) .. " %* "
-    end
-    if value ~= state.value then
-      presentation.header(view, win, value)
-      if vim.wo[win].winbar == value then
-        state.value = value
-      else
-        headers[win] = nil
-      end
-    end
-  end
-end
-
-local function header(view, win, left, right)
-  view.headers = view.headers or {}
-  local state = view.headers[win]
-  -- A pane restored while paused must be claimed again, not skipped as someone else's winbar.
-  local value = state and vim.api.nvim_win_is_valid(win) and vim.wo[win].winbar == state.value and state.value or nil
-  view.headers[win] = { left = left, right = right, value = value }
-  refresh_headers(view)
-end
-
-local function render(view, cursor_path, frame_only)
-  if not valid(view) or not vim.api.nvim_buf_is_valid(view.explorer_buf) then
-    return
-  end
-  if view.error or not view.ready then
-    local label = view.error and ui.label(view.ui_icons, "error", "Update stopped: " .. explorer.display(view.error))
-      or ui.prefix(spinner.frame() or ui.icon(view.ui_icons, "loading"), "Loading " .. title(view))
-    local group = view.error and "DiffreelExplorerError" or "DiffreelDiffWinbarState"
-    header(
-      view,
-      view.layout == "inline" and view.right_win or view.left_win,
-      " %#" .. group .. "#%<" .. ui.winbar(label) .. "%*"
-    )
-  end
-  if view.layout_changing then
-    return
-  end
-  if not windows.explorer_visible(view) then
-    refresh_headers(view)
-    return
-  end
-  local position = vim.api.nvim_win_call(view.explorer_win, vim.fn.winsaveview)
-  local old_rows = view.rows
-  local old = old_rows and old_rows[position.lnum - 3]
-  local footer_anchor = ui.anchor(view.footer_rows, position.lnum, position.col)
-  local width = vim.api.nvim_win_get_width(view.explorer_win)
-  local lines = {
-    " " .. ui.label(view.ui_icons, "repository", explorer.display(vim.fs.basename(view.root))),
-    " " .. title(view),
-    "",
-  }
-  local rows, tree = explorer.rows(
-    view.entries or {},
-    view.collapsed,
-    width,
-    view.tree,
-    line_stats.files(view),
-    view.explorer_options,
-    view.ui_icons
-  )
-  local count = #(view.entries or {})
-  local position_label = ""
-  for i, entry in ipairs(explorer.ordered(tree, view.explorer_options.mode)) do
-    if entry.path == view.selected_path then
-      position_label = i .. " / "
-      break
-    end
-  end
-  header(
-    view,
-    view.explorer_win,
-    " %#DiffreelExplorerTitle#" .. ui.winbar(ui.label(view.ui_icons, "changes", "Changes")) .. "%*",
-    "%#DiffreelExplorerFileCount# " .. position_label .. count .. " %*"
-  )
-  view.rows, view.tree = rows, tree
-  for _, row in ipairs(rows) do
-    lines[#lines + 1] = row.text
-  end
-  local details, footer_rows = {}, {}
-  local function append(text, group, id, icon)
-    -- Overlaying the frame as a separate extmark would land it on the continuation lines
-    -- ui.wrap produces, so the frame replaces the icon in the slot ui.label already reserves.
-    local glyph = icon == "loading" and not view.error and spinner.frame() or nil
-    local label = icon and (glyph and ui.prefix(glyph, text) or ui.label(view.ui_icons, icon, text)) or text
-    for _, part in ipairs(ui.wrap(label, width)) do
-      lines[#lines + 1] = part.text
-      part.id = id or group
-      footer_rows[#lines] = part
-      if group then
-        details[#details + 1] = { row = #lines - 1, group = "DiffreelExplorer" .. group }
-      end
-    end
-  end
-  if #rows == 0 then
-    append(
-      view.error and "Update stopped" or (view.updating and "Loading…" or "No changes"),
-      view.error and "Error" or (view.updating and "Loading" or "Empty"),
-      "empty",
-      view.error and "error" or (view.updating and "loading" or "clean")
-    )
-  end
-  lines[#lines + 1] = ""
-  local selected = view.selected_path and view.by_path[view.selected_path]
-  if view.line_stats then
-    local stats = line_stats.current(view)
-    if stats then
-      append(
-        "Saved lines: +"
-          .. stats.additions
-          .. " -"
-          .. stats.deletions
-          .. ((stats.pending or stats.unavailable > 0 or stats.error) and " · partial" or ""),
-        "Summary",
-        "summary",
-        "changes"
-      )
-      if stats.error then
-        append(
-          "Line counts unavailable: " .. explorer.display(stats.error),
-          "StatsUnavailable",
-          "stats_error",
-          "warning"
-        )
-      elseif selected then
-        local value = stats.files[selected.path]
-        local reason = selected.buffer_only and "unsaved-only file" or (value and value.reason)
-        if reason then
-          append("Line counts: " .. explorer.display(reason), "StatsUnavailable", "stats_reason", "warning")
-        end
-      end
-    end
-  end
-  if selected and selected.git and selected.git.submodule_state then
-    local state = selected.git.submodule_state
-    append("Submodule:", "Detail", "submodule")
-    if state:sub(2, 2) == "C" then
-      append("  commit changed", "Detail", "submodule_commit")
-    end
-    if state:sub(3, 3) == "M" then
-      append("  tracked changes", "Detail", "submodule_tracked")
-    end
-    if state:sub(4, 4) == "U" then
-      append("  untracked files", "Detail", "submodule_untracked")
-    end
-  end
-  if selected and selected.left.exists and selected.right.exists then
-    if selected.left.mode ~= selected.right.mode then
-      append("Mode: " .. selected.left.mode .. " → " .. selected.right.mode, "Detail", "mode")
-    end
-    if
-      selected.left.kind == "text"
-      and selected.right.kind == "text"
-      and format_label(selected.left) ~= format_label(selected.right)
-    then
-      append(format_label(selected.left) .. " → " .. format_label(selected.right), "Detail", "format")
-    end
-  end
-  if view.error then
-    append("Update stopped: " .. explorer.display(view.error), "Error", "error", "error")
-  elseif view.disk_conflict then
-    append("Unsaved buffer differs from disk", "Conflict", "conflict", "warning")
-  elseif view.navigation then
-    append("Return to source or select a file", "Paused", "paused_hint")
-  end
-  local rendered = view.explorer_render
-  if
-    not rendered
-    or rendered.generation ~= highlights.generation
-    or rendered.rows ~= rows
-    or rendered.selected_path ~= view.selected_path
-    or rendered.tick ~= vim.api.nvim_buf_get_changedtick(view.explorer_buf)
-    or not vim.deep_equal(rendered.lines, lines)
-  then
-    set_lines(view.explorer_buf, lines)
-    vim.api.nvim_buf_clear_namespace(view.explorer_buf, namespace, 0, -1)
-    vim.api.nvim_buf_set_extmark(
-      view.explorer_buf,
-      namespace,
-      0,
-      0,
-      { end_row = 1, hl_group = "DiffreelExplorerRootName" }
-    )
-    vim.api.nvim_buf_set_extmark(
-      view.explorer_buf,
-      namespace,
-      1,
-      0,
-      { end_row = 2, hl_group = "DiffreelExplorerComparison" }
-    )
-    for _, item in ipairs(details) do
-      vim.api.nvim_buf_set_extmark(view.explorer_buf, namespace, item.row, 0, {
-        end_col = #lines[item.row + 1],
-        hl_group = item.group,
-      })
-    end
-    for i, row in ipairs(rows) do
-      explorer.highlight(view.explorer_buf, namespace, i + 2, row, view.selected_path)
-    end
-    view.explorer_render = {
-      generation = highlights.generation,
-      details = details,
-      rows = rows,
-      selected_path = view.selected_path,
-      lines = lines,
-      tick = vim.api.nvim_buf_get_changedtick(view.explorer_buf),
-    }
-  end
-  refresh_headers(view)
-  view.footer_rows = footer_rows
-  if frame_only then
-    return
-  end
-  local explicit = cursor_path or view.reveal_path
-  local target = explorer.cursor_path(rows, explicit or (old and old.path) or view.selected_path)
-  if not explicit and footer_anchor then
-    local row, col = ui.locate(footer_rows, footer_anchor)
-    row = row or math.min(#lines, math.max(#rows + 4, position.lnum + #rows - #old_rows))
-    position.topline = math.max(1, position.topline + row - position.lnum)
-    position.lnum, position.col = row, col or position.col
-    vim.api.nvim_win_call(view.explorer_win, function()
-      vim.fn.winrestview(position)
-    end)
-  elseif not explicit and old_rows and #old_rows > 0 and not old then
-    if position.lnum > 3 then
-      position.lnum = position.lnum + #rows - #old_rows
-    end
-    position.lnum = math.min(#lines, math.max(1, position.lnum))
-    vim.api.nvim_win_call(view.explorer_win, function()
-      vim.fn.winrestview(position)
-    end)
-  else
-    for i, row in ipairs(rows) do
-      if row.path == target then
-        if not explicit and old and old.path == target then
-          position.topline = math.max(1, position.topline + i + 3 - position.lnum)
-          position.lnum = i + 3
-          vim.api.nvim_win_call(view.explorer_win, function()
-            vim.fn.winrestview(position)
-          end)
-        else
-          vim.api.nvim_win_set_cursor(view.explorer_win, { i + 3, 0 })
-        end
-        break
-      end
-    end
-  end
-  view.reveal_path = nil
-  full_name.update(view)
-end
-
-local function loading(view)
-  -- A stopped review never animates: line_stats.start only runs from ready(), which
-  -- requires no error, so a pending counter on an errored view would never resolve.
-  if not valid(view) or view.closing or view.error then
-    return false
-  end
-  if view.updating or not view.ready then
-    return true
-  end
-  if not view.line_stats then
-    return false
-  end
-  local stats = line_stats.current(view)
-  return not stats or stats.pending == true
 end
 
 local function animate()
@@ -568,178 +160,6 @@ local function ready(view)
   end
 end
 
-local function put_virtual(view, side, data, path)
-  local buf = side == "left" and view.left_buf or view.empty_buf
-  if path and view.manager and view.comparison then
-    -- Renaming a reused buffer creates an unowned alternate-name buffer, even with keepalt.
-    vim.b[buf].diffreel_root, vim.b[buf].diffreel_path = view.manager.root, path
-  end
-  local lines = data.lines
-    or {
-      "Not compared: " .. (data.reason or data.kind),
-      "Mode: " .. (data.mode or "?"),
-      "Size: " .. ((data.size and data.size > 0) and (data.size .. " bytes") or "not read"),
-      data.oid and ("Object: " .. data.oid) or "",
-    }
-  set_lines(buf, lines)
-  vim.bo[buf].modifiable = true
-  vim.bo[buf].endofline = data.endofline or false
-  vim.bo[buf].fileformat = data.fileformat or "unix"
-  vim.bo[buf].bomb = data.bom or false
-  vim.bo[buf].modified = false
-  vim.bo[buf].modifiable = false
-  local lang
-  if data.kind == "text" and path then
-    local ft = vim.filetype.match({ filename = path })
-    lang = ft and vim.treesitter.language.get_lang(ft)
-  end
-  if lang ~= vim.b[buf].diffreel_language then
-    pcall(vim.treesitter.stop, buf)
-    vim.b[buf].diffreel_language = nil
-    if lang and pcall(vim.treesitter.start, buf, lang) then
-      vim.b[buf].diffreel_language = lang
-    end
-  end
-  return buf
-end
-
-local function release_right(view, previous)
-  if previous and previous ~= view.empty_buf and previous ~= view.right_buf then
-    lease.release(previous, view.id)
-  end
-end
-
-local function buffer_hash(buf)
-  local borrowed = lease.buffers[buf]
-  local tick = vim.api.nvim_buf_get_changedtick(buf)
-  local format, bomb, eol = vim.bo[buf].fileformat, vim.bo[buf].bomb, vim.bo[buf].endofline
-  local cached = borrowed and borrowed.content_hash
-  if cached and cached.tick == tick and cached.format == format and cached.bomb == bomb and cached.eol == eol then
-    return cached.value
-  end
-  local newline = format == "dos" and "\r\n" or "\n"
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  local data = table.concat(lines, newline)
-  local bom = bomb and string.char(239, 187, 191) or ""
-  local empty = #lines == 1
-    and lines[1] == ""
-    and vim.api.nvim_buf_call(buf, function()
-      return vim.fn.wordcount().bytes <= #bom
-    end)
-  if eol and not empty then
-    data = data .. newline
-  end
-  local value = vim.fn.sha256(bom .. data)
-  if borrowed then
-    borrowed.content_hash = { tick = tick, format = format, bomb = bomb, eol = eol, value = value }
-  end
-  return value
-end
-
-local function set_review_buffer(view, win, buf)
-  if vim.api.nvim_win_get_buf(win) == buf then
-    return
-  end
-  with_buffer_operation(function()
-    if vim.wo[win].diff then
-      -- Replacing a diff window's buffer leaves the hidden buffer in the tab's comparison.
-      vim.api.nvim_win_call(win, function()
-        presentation.diffoff(view, win)
-      end)
-    end
-    presentation.restore(view, win)
-    lease.preserve_buffer(buf, function()
-      vim.api.nvim_win_set_buf(win, buf)
-    end)
-  end)
-end
-
-local function set_right_buffer(view, buf)
-  if view.right_engine then
-    set_review_buffer(view, view.right_engine, buf)
-  end
-  set_review_buffer(view, view.right_win, buf)
-end
-
-local function sync_buffer_state(view)
-  if
-    not valid(view)
-    or not phase.selected(view)
-    or not view.comparison
-    or vim.api.nvim_win_get_buf(view.right_win) ~= view.right_buf
-  then
-    return
-  end
-  local entry = view.selected_path and view.by_path[view.selected_path]
-  if not entry then
-    return
-  end
-  local buf = view.right_buf
-  local dirty = view.comparison.right == "worktree" and buf ~= view.empty_buf and vim.bo[buf].modified
-  view.file_missing = entry.status == "missing" and not dirty
-  view.disk_conflict = dirty and (entry.right.kind ~= "text" or buffer_hash(buf) ~= entry.right.content_id) or false
-  local path = header_path(view.selected_path)
-  local left_revision = ui.endpoint(view.ui_icons, view.comparison.left)
-  if view.follow_head then
-    left_revision = ui.label(
-      view.ui_icons,
-      view.comparison.left == "" and "empty" or "commit",
-      "HEAD · " .. (view.comparison.left == "" and "Empty tree" or view.comparison.left:sub(1, 8))
-    )
-  end
-  if view.file_missing then
-    header(
-      view,
-      view.left_win,
-      path
-        .. "%#DiffreelDiffWinbarState# · "
-        .. ui.winbar(ui.label(view.ui_icons, "warning", "File is absent from both endpoints"))
-        .. "%*"
-    )
-  else
-    header(
-      view,
-      view.left_win,
-      entry.old_path and header_path(entry.old_path) or path,
-      "%#DiffreelDiffWinbarRevision# " .. ui.winbar(left_revision) .. " %*"
-    )
-  end
-  local detail = dirty
-      and format_label({
-        fileformat = vim.bo[buf].fileformat,
-        bom = vim.bo[buf].bomb,
-        endofline = vim.bo[buf].endofline,
-      })
-    or format_label(entry.right)
-  local right_revision = ui.endpoint(view.ui_icons, view.comparison.right)
-  if dirty then
-    right_revision = ui.label(view.ui_icons, "unsaved", "Unsaved")
-  end
-  if view.layout == "inline" then
-    local reason = entry.left.reason or entry.right.reason
-    if reason then
-      right_revision = right_revision
-        .. " · "
-        .. ui.label(view.ui_icons, "warning", "Not compared: " .. explorer.display(reason))
-    end
-    if view.file_missing then
-      right_revision = ui.label(view.ui_icons, "warning", "File is absent from both endpoints")
-    end
-  end
-  header(
-    view,
-    view.right_win,
-    path,
-    "%#"
-      .. (dirty and "DiffreelDiffWinbarModified" or "DiffreelDiffWinbarRevision")
-      .. "# "
-      .. ui.winbar(right_revision)
-      .. "%*"
-      .. ((detail == "LF" or detail == "") and "" or ("%#DiffreelDiffWinbarState# · " .. detail:gsub("%%", "%%%%")))
-      .. " %*"
-  )
-end
-
 local changed_buffers, state_queued = {}, false
 local function buffer_changed(buf)
   if not lease.buffers[buf] then
@@ -763,28 +183,6 @@ local function buffer_changed(buf)
       end
     end
   end)
-end
-
-local observed_buffers = {}
-local function observe_buffer(buf)
-  if observed_buffers[buf] then
-    return
-  end
-  observed_buffers[buf] = vim.api.nvim_buf_attach(buf, false, {
-    on_lines = function(_, changed)
-      if not lease.buffers[changed] then
-        observed_buffers[changed] = nil
-        return true
-      end
-      buffer_changed(changed)
-    end,
-    on_reload = function(_, changed)
-      buffer_changed(changed)
-    end,
-    on_detach = function(_, detached)
-      observed_buffers[detached] = nil
-    end,
-  }) or nil
 end
 
 local function select(view, path, reveal, prepared)
@@ -871,7 +269,7 @@ local function select(view, path, reveal, prepared)
         end
         return
       end
-      observe_buffer(buf)
+      buffers.observe(buf, buffer_changed)
       put_virtual(view, "left", left, path)
       set_review_buffer(view, view.left_win, view.left_buf)
       expected_buffer = buf
@@ -1287,114 +685,35 @@ local function activate_pr(view, snapshot, metadata, prepared)
   receive(view, snapshot, prepared)
 end
 
-local function cancel_manager(manager)
-  if M.managers[manager.key] == manager then
-    M.managers[manager.key] = nil
-  end
-  manager.cancelled = true
-  if manager.cancel then
-    manager.cancel()
-  end
-  if manager.backend then
-    manager.backend:close()
-  end
-end
-
-local function get_manager(view, callback)
-  local root = view.root
-  local manager = M.managers[root]
-  view.startup_seq = (view.startup_seq or 0) + 1
-  local sequence = view.startup_seq
-  if manager and manager.ready and not manager.backend.closed then
-    callback(nil, manager)
-    return
-  end
-  local waiter = { view = view, sequence = sequence, done = callback }
-  if manager and not manager.cancelled and (not manager.backend or not manager.backend.closed) then
-    view.pending_manager = manager
-    manager.waiters[#manager.waiters + 1] = waiter
-    return
-  end
-  manager = { root = root, waiters = { waiter }, ready = false, key = root, watch = M.config.watch ~= false }
-  view.pending_manager = manager
-  M.managers[root] = manager
-  local config = vim.tbl_extend("force", M.config, { root = root })
-  local function owned()
-    return M.managers[root] == manager and not manager.cancelled
-  end
-  local function finish(err, info)
-    if not owned() then
-      return
-    end
-    if not err then
-      local ok, failure = pcall(distribution.check_info, info, manager.expected)
-      if not ok then
-        err = tostring(failure)
-      end
-    end
-    if err then
-      cancel_manager(manager)
-    else
-      manager.ready, manager.root, manager.session_id = true, info.root, info.session_id
-    end
-    local waiters = manager.waiters
-    manager.waiters = {}
-    for _, waiting in ipairs(waiters) do
-      if valid(waiting.view) and waiting.view.startup_seq == waiting.sequence then
-        waiting.view.pending_manager = nil
-        waiting.done(err, manager)
+local function notify(manager, method, params)
+  for _, view in pairs(M.views) do
+    if view.manager == manager and valid(view) then
+      if method == "pr/prepared" or method == "pr/error" then
+        pr.notify(view, method, params)
+      elseif method == "repo/changed" and view.follow_head then
+        open_comparison(view)
+      elseif
+        method == "comparison/updated"
+        and view.comparison
+        and params.comparison_id == view.comparison.comparison_id
+        and not view.pr_request
+      then
+        receive(view, params)
+      elseif
+        method == "comparison/progress"
+        and view.comparison
+        and params.comparison_id == view.comparison.comparison_id
+        and not view.pr_request
+      then
+        view.updating = true
+        render(view)
+      elseif method == "backend/error" then
+        pr.cancel(view)
+        phase.enter(view, "stopped", params.message)
+        render(view)
       end
     end
   end
-  manager.cancel = install.ensure(config, function(err, prepared)
-    if not owned() then
-      return
-    end
-    if err then
-      finish(err)
-      return
-    end
-    manager.expected = prepared.expected
-    config.daemon = prepared.path
-    local ok, backend = pcall(function()
-      return require("diffreel.backend.rust").new(config, function(method, params)
-        for _, view in pairs(M.views) do
-          if view.manager == manager and valid(view) then
-            if method == "pr/prepared" or method == "pr/error" then
-              pr.notify(view, method, params)
-            elseif method == "repo/changed" and view.follow_head then
-              open_comparison(view)
-            elseif
-              method == "comparison/updated"
-              and view.comparison
-              and params.comparison_id == view.comparison.comparison_id
-              and not view.pr_request
-            then
-              receive(view, params)
-            elseif
-              method == "comparison/progress"
-              and view.comparison
-              and params.comparison_id == view.comparison.comparison_id
-              and not view.pr_request
-            then
-              view.updating = true
-              render(view)
-            elseif method == "backend/error" then
-              pr.cancel(view)
-              phase.enter(view, "stopped", params.message)
-              render(view)
-            end
-          end
-        end
-      end)
-    end)
-    if not ok then
-      finish(tostring(backend))
-      return
-    end
-    manager.backend = backend
-    backend:request("initialize", { protocol = distribution.protocol }, finish)
-  end)
 end
 
 function M.open(opts)
@@ -1581,7 +900,7 @@ function M.open(opts)
   if not valid(view) then
     return view
   end
-  get_manager(view, function(err, manager)
+  manager_module.get(M, view, notify, function(err, manager)
     if not valid(view) then
       return
     end
@@ -2104,7 +1423,7 @@ function M.refresh(view)
     local recovery = {}
     view.pr_recovery = recovery
     local previous = view.manager
-    get_manager(view, function(err, manager)
+    manager_module.get(M, view, notify, function(err, manager)
       if not valid(view) or view.pr_recovery ~= recovery then
         return
       end
@@ -2141,7 +1460,7 @@ function M.refresh(view)
     return
   end
   if not view.manager or view.manager.backend.closed then
-    get_manager(view, function(err, manager)
+    manager_module.get(M, view, notify, function(err, manager)
       if not valid(view) then
         return
       end
@@ -2196,7 +1515,7 @@ local function dispose(view)
       end
     end
     if not needed then
-      cancel_manager(pending)
+      manager_module.cancel(M, pending)
     end
   end
   local failures = {}
@@ -2281,7 +1600,7 @@ function M.close(view)
   local temporary = vim.tbl_contains(vim.api.nvim_list_wins(), function(win)
     return vim.fn.win_gettype(win) == "autocmd"
   end, { predicate = true })
-  if buffer_operations > 0 or view.layout_changing or temporary then
+  if buffers.busy() or view.layout_changing or temporary then
     -- Changing focus does not unwind a temporary loading window or an active buffer assignment.
     vim.defer_fn(function()
       phase.enter(view, "reopened")
@@ -2341,7 +1660,7 @@ function M.shutdown()
     dispose(view)
   end
   for _, manager in pairs(M.managers) do
-    cancel_manager(manager)
+    manager_module.cancel(M, manager)
   end
   M.managers = {}
   pr.shutdown()
