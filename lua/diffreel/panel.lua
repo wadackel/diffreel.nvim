@@ -1,6 +1,8 @@
 local M = {}
 local presentation = require("diffreel.presentation")
 local layout = require("diffreel.layout")
+local windows = require("diffreel.windows")
+local options = require("diffreel.options")
 local directions = { left = "left", right = "right", top = "above", bottom = "below" }
 local resize_generation = 0
 
@@ -10,7 +12,7 @@ function M.visible(view)
 end
 
 function M.windows(view)
-  return require("diffreel.layout").owned_windows(view)
+  return windows.owned_windows(view)
 end
 
 local function vertical(position)
@@ -65,7 +67,7 @@ function M.prepare(view, settings, patch, automatic)
   end
   if type(value) == "function" then
     value = value({ columns = vim.o.columns, lines = vim.o.lines })
-    require("diffreel.options").dimension(value, axis)
+    options.dimension(value, axis)
   elseif value == nil then
     value = math.min(35, math.max(22, math.floor(vim.o.columns * 0.2)))
   end

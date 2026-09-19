@@ -61,7 +61,7 @@ local ok, err = xpcall(function()
     return { saved.lnum, saved.topline, saved.topfill }
   end
   local function at_start(label)
-    for _, win in ipairs(require("diffreel.layout").visible_windows(view)) do
+    for _, win in ipairs(require("diffreel.windows").visible_windows(view)) do
       local pos = position(win)
       assert(vim.deep_equal(pos, { 1, 1, 0 }), label .. ": " .. vim.inspect(pos))
     end

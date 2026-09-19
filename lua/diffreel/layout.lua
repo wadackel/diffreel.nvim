@@ -1,3 +1,6 @@
+local windows = require("diffreel.windows")
+local presentation = require("diffreel.presentation")
+local inline = require("diffreel.inline")
 local M = {}
 
 local function dimensions(view)
@@ -48,43 +51,6 @@ function M.resize(view)
   view.layout_resize_pending = nil
 end
 
-function M.visible_windows(view)
-  local wins = { view.right_win }
-  if view.layout ~= "inline" then
-    table.insert(wins, 1, view.left_win)
-  end
-  return wins
-end
-
-function M.engine_windows(view)
-  return { view.left_win, view.right_engine or view.right_win }
-end
-
-function M.owned_windows(view)
-  local wins, seen = {}, {}
-  local function add(win)
-    if win and not seen[win] then
-      wins[#wins + 1], seen[win] = win, true
-    end
-  end
-  add(view.left_win)
-  add(view.right_win)
-  add(view.right_engine)
-  add(view.explorer_win)
-  for _, win in ipairs(view.layout_staging or {}) do
-    add(win)
-  end
-  return wins
-end
-
-function M.visible_pane(view, win)
-  return win == view.right_win or (win == view.left_win and view.layout ~= "inline") or win == view.explorer_win
-end
-
-function M.engine(view, win)
-  return win == view.right_win and (view.right_engine or win) or win
-end
-
 local function hidden(buf, source)
   return vim.api.nvim_win_call(source, function()
     return vim.api.nvim_open_win(buf, false, {
@@ -100,18 +66,14 @@ local function hidden(buf, source)
   end)
 end
 
-local function engine_options(view, win)
-  require("diffreel.presentation").engine(view, win)
-end
-
 function M.staging(view)
   local wins = {}
   view.layout_staging = wins
   local ok, err = pcall(function()
     for _, buf in ipairs({ view.left_buf, view.right_buf }) do
       wins[#wins + 1] = hidden(buf, view.right_win)
-      require("diffreel.presentation").diffthis(view, wins[#wins])
-      engine_options(view, wins[#wins])
+      presentation.diffthis(view, wins[#wins])
+      presentation.engine(view, wins[#wins])
     end
   end)
   if not ok then
@@ -132,11 +94,11 @@ local function close_engine(view, win)
     end
     attempt(function()
       vim.api.nvim_win_call(win, function()
-        require("diffreel.presentation").diffoff(view, win)
+        presentation.diffoff(view, win)
       end)
     end)
     attempt(function()
-      require("diffreel.presentation").restore(view, win)
+      presentation.restore(view, win)
     end)
     attempt(function()
       vim.api.nvim_win_close(win, true)
@@ -156,7 +118,6 @@ function M.clear_staging(view)
 end
 
 function M.apply(view, mode)
-  local presentation = require("diffreel.presentation")
   local previous, right = view.layout or "side_by_side", view.right_win
   if mode == previous then
     return
@@ -165,13 +126,13 @@ function M.apply(view, mode)
   local focused = vim.api.nvim_get_current_win() == view.left_win
   view.layout_ratios = view.layout_ratios or {}
   if previous ~= "inline" then
-    require("diffreel.inline").capture_folds(view)
+    inline.capture_folds(view)
     M.capture_ratio(view)
     view.saved_left_view = vim.api.nvim_win_call(view.left_win, vim.fn.winsaveview)
   end
   local old_engine, created = view.right_engine, nil
   local previous_diff = {}
-  for _, win in ipairs(M.engine_windows(view)) do
+  for _, win in ipairs(windows.engine_windows(view)) do
     previous_diff[win] = vim.wo[win].diff
   end
   view.layout_changing = true
@@ -186,13 +147,13 @@ function M.apply(view, mode)
         view.left_win,
         { relative = "editor", row = 0, col = 0, width = 2, height = 10, hide = true, focusable = false }
       )
-      for _, win in ipairs(M.engine_windows(view)) do
+      for _, win in ipairs(windows.engine_windows(view)) do
         if vim.wo[right].diff and not vim.wo[win].diff then
           vim.api.nvim_win_call(win, function()
             presentation.diffthis(view, win)
           end)
         end
-        engine_options(view, win)
+        presentation.engine(view, win)
       end
       vim.api.nvim_win_call(right, function()
         presentation.diffoff(view, right)
@@ -202,7 +163,7 @@ function M.apply(view, mode)
       presentation.inline(view, right)
     else
       if previous == "inline" then
-        require("diffreel.inline").clear(view)
+        inline.clear(view)
         presentation.restore(view, right)
       end
       vim.api.nvim_win_set_config(
@@ -223,7 +184,7 @@ function M.apply(view, mode)
       if old_engine and vim.wo[old_engine].diff then
         presentation.diffthis(view, right)
       end
-      for _, win in ipairs(M.visible_windows(view)) do
+      for _, win in ipairs(windows.visible_windows(view)) do
         if vim.wo[win].diff then
           presentation.apply(view, win, previous == "inline")
         end
@@ -235,7 +196,7 @@ function M.apply(view, mode)
         end)
       end
       view.last_split = mode
-      require("diffreel.inline").restore_folds(view)
+      inline.restore_folds(view)
     end
   end, debug.traceback)
   if not ok then
@@ -249,7 +210,7 @@ function M.apply(view, mode)
         view.left_win,
         { split = previous == "stacked" and "above" or "left", win = right, hide = false, focusable = true }
       )
-      for _, win in ipairs(M.visible_windows(view)) do
+      for _, win in ipairs(windows.visible_windows(view)) do
         pcall(vim.api.nvim_win_call, win, function()
           if previous_diff[win] then
             presentation.diffthis(view, win)
@@ -266,12 +227,12 @@ function M.apply(view, mode)
         view.left_win,
         { relative = "editor", row = 0, col = 0, width = 2, height = 10, hide = true, focusable = false }
       )
-      for _, win in ipairs(M.engine_windows(view)) do
+      for _, win in ipairs(windows.engine_windows(view)) do
         pcall(vim.api.nvim_win_call, win, function()
           if previous_diff[win] and not vim.wo[win].diff then
             presentation.diffthis(view, win)
           end
-          engine_options(view, win)
+          presentation.engine(view, win)
         end)
       end
       pcall(vim.api.nvim_win_call, right, function()

@@ -1,4 +1,3 @@
-local layout = require("diffreel.layout")
 local M = {}
 local pool, windows = {}, {}
 local capability_namespace

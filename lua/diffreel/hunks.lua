@@ -1,5 +1,6 @@
 local M = {}
-local layout = require("diffreel.layout")
+local windows = require("diffreel.windows")
+local inline = require("diffreel.inline")
 
 local function prepared(view, win)
   if not view.alive or not view.ready or view.selection_pending or view.navigation then
@@ -9,7 +10,7 @@ local function prepared(view, win)
     return false
   end
   for _, side in ipairs({ "left", "right" }) do
-    local pane, buf = layout.engine(view, view[side .. "_win"]), view[side .. "_buf"]
+    local pane, buf = windows.engine(view, view[side .. "_win"]), view[side .. "_buf"]
     if not vim.api.nvim_win_is_valid(pane) or vim.api.nvim_win_get_buf(pane) ~= buf or not vim.wo[pane].diff then
       return false
     end
@@ -19,7 +20,7 @@ end
 
 local function query(view, action)
   local positions = {}
-  for _, win in ipairs(layout.engine_windows(view)) do
+  for _, win in ipairs(windows.engine_windows(view)) do
     positions[win] = vim.api.nvim_win_call(win, vim.fn.winsaveview)
   end
   local ok, result = pcall(action)
@@ -51,7 +52,7 @@ end
 function M.place(view, win, row)
   vim.api.nvim_win_set_cursor(win, { row, 0 })
   if view.layout == "inline" and win == view.right_win then
-    require("diffreel.inline").reveal_start(view)
+    inline.reveal_start(view)
   end
 end
 
@@ -59,7 +60,7 @@ function M.boundary(view, win, last)
   if not prepared(view, win) then
     return
   end
-  win = layout.engine(view, win)
+  win = windows.engine(view, win)
   return query(view, function()
     local found = false
     for _, pane in ipairs({ win, win == view.left_win and (view.right_engine or view.right_win) or view.left_win }) do
@@ -80,7 +81,7 @@ function M.move(view, win, direction)
   if not prepared(view, win) then
     return false
   end
-  local engine = layout.engine(view, win)
+  local engine = windows.engine(view, win)
   if engine ~= win then
     local before = vim.api.nvim_win_get_cursor(win)
     local row = query(view, function()
@@ -117,7 +118,7 @@ function M.eligible(view, win)
     return false
   end
   local row = vim.api.nvim_win_get_cursor(win)[1]
-  return vim.api.nvim_win_call(layout.engine(view, win), function()
+  return vim.api.nvim_win_call(windows.engine(view, win), function()
     return vim.fn.diff_hlID(row, 1) > 0
   end)
 end
@@ -127,7 +128,7 @@ function M.range(view, win, count)
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(win)
-  win = layout.engine(view, win)
+  win = windows.engine(view, win)
   return query(view, function()
     return vim.api.nvim_win_call(win, function()
       vim.api.nvim_win_set_cursor(win, cursor)

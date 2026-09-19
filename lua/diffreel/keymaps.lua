@@ -1,5 +1,6 @@
 local M = {}
 local explorer = require("diffreel.explorer")
+local hunks = require("diffreel.hunks")
 M.scopes = { explorer = "n", diff = "n", diff_visual = "x", diff_operator = "o" }
 
 local defaults = {
@@ -297,7 +298,7 @@ function M.guards(policy)
   for _, binding in ipairs(policy) do
     if binding.action == "select_hunk" then
       result[binding.lhs] = function(view)
-        return require("diffreel.hunks").eligible(view, vim.api.nvim_get_current_win())
+        return hunks.eligible(view, vim.api.nvim_get_current_win())
       end
     end
   end

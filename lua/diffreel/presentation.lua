@@ -1,5 +1,6 @@
 local M = {}
 local lease = require("diffreel.lease")
+local windows = require("diffreel.windows")
 local owners = setmetatable({}, { __mode = "k" })
 local native_options = { "foldcolumn", "foldmethod", "foldenable", "wrap", "scrollbind", "cursorbind" }
 
@@ -231,7 +232,7 @@ local function clean_copies(view, outside)
       for _, win in ipairs(vim.fn.win_findbuf(buf)) do
         local owned = win == original_win
         for other in pairs(owners) do
-          if vim.tbl_contains(require("diffreel.layout").owned_windows(other), win) then
+          if vim.tbl_contains(windows.owned_windows(other), win) then
             owned = true
           end
         end
