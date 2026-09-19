@@ -18,7 +18,11 @@ The GitHub repository is `wadackel/diffreel.nvim`, the plugin name is `diffreel.
 
 | Change | Start with |
 |---|---|
-| Commands, tabs, selection, comparison lifecycle, navigation | [lua/diffreel/init.lua](lua/diffreel/init.lua) |
+| Commands, tabs, selection, comparison lifecycle, layout, navigation | [lua/diffreel/init.lua](lua/diffreel/init.lua) |
+| Explorer buffer, winbar and dirty/missing labels | [lua/diffreel/render.lua](lua/diffreel/render.lua) |
+| Virtual/real buffer application, digests, line observer | [lua/diffreel/buffers.lua](lua/diffreel/buffers.lua) |
+| Daemon manager startup and waiters | [lua/diffreel/manager.lua](lua/diffreel/manager.lua) |
+| Lifecycle `User` events | [lua/diffreel/events.lua](lua/diffreel/events.lua) |
 | Keymap configuration and operations | [lua/diffreel/keymaps.lua](lua/diffreel/keymaps.lua) |
 | Shared real-buffer mappings and options | [lua/diffreel/lease.lua](lua/diffreel/lease.lua) |
 | Window styling, folds, option restoration | [lua/diffreel/presentation.lua](lua/diffreel/presentation.lua) |

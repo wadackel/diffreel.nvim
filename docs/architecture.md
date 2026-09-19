@@ -21,7 +21,11 @@ flowchart LR
 
 | State | Ownership and lifetime |
 |---|---|
-| UI manager | [init.lua](../lua/diffreel/init.lua) keys managers by canonical worktree root. Tabs in the same editor/worktree share a session. Closing a review retains a healthy manager; editor shutdown closes it. |
+| UI manager | [manager.lua](../lua/diffreel/manager.lua) starts one manager per canonical worktree root from the registry that [init.lua](../lua/diffreel/init.lua) owns, queues views that arrive during startup, and closes the backend on cancellation; init.lua routes each backend notification to the views on that manager. Tabs in the same editor/worktree share a session. Closing a review retains a healthy manager; editor shutdown closes it. |
+| Public API and view hub | [init.lua](../lua/diffreel/init.lua) exports the Lua API and keeps selection, comparison lifecycle, layout, navigation, open/close and setup together because they call each other; the leaf concerns below are required from it. |
+| Explorer and winbar rendering | [render.lua](../lua/diffreel/render.lua) rewrites the explorer buffer, composes every owned pane's winbar, decides whether a view still animates, and derives the dirty/missing labels from buffer and disk state. |
+| Buffer application | [buffers.lua](../lua/diffreel/buffers.lua) creates owned scratch buffers, fills virtual sides, replaces a pane's buffer under the buffer-operation counter, computes the content digest, and attaches the single line observer. |
+| Lifecycle events | [events.lua](../lua/diffreel/events.lua) fires the `User Diffreel*` autocmds with view/comparison context and tracks Enter/Leave. |
 | Repository | [repository.rs](../daemon/src/repository.rs) owns Git directories, HEAD, comparisons, discovery metadata, and metrics. Linked worktrees retain separate index/HEAD state. |
 | Comparison | Resolved endpoints, sorted/deduplicated Git pathspecs, untracked inclusion and an optional pinned file identify a cached comparison through structured serialization. Entries, index snapshot, statistics cache, generation, dirty state, errors and reconciliation belong here. |
 | View | Each review tab owns selection, transition counters, windows, and virtual buffers. Backend subscriptions carry visibility so hidden views need no periodic work. |
@@ -143,9 +147,9 @@ The left pane reuses one virtual buffer, so its window keeps the previous file's
 
 The selected modified buffer remains an explorer entry when its path leaves a snapshot, including while definition navigation pauses the panes. Its old entry cannot supply endpoint metadata after a HEAD transition, disk reversion, or ignore change; selection inspects the path against the current comparison before publishing the retained draft.
 
-Real buffers have at most one diffreel line observer, reused across views and leases. It detects API edits even when the buffer is not current, and detaches on unload or the next edit after the final lease ends. Buffer-state work is coalesced with normal editing events; format-option changes use the affected buffer at `OptionSet` time. The shared lease caches its digest by changedtick, fileformat, BOM and EOF-newline state and releases the cache with its mappings/options.
+Real buffers have at most one diffreel line observer ([buffers.lua](../lua/diffreel/buffers.lua)), reused across views and leases. It detects API edits even when the buffer is not current, and detaches on unload or the next edit after the final lease ends. Buffer-state work is coalesced with normal editing events; format-option changes use the affected buffer at `OptionSet` time. The shared lease caches its digest by changedtick, fileformat, BOM and EOF-newline state and releases the cache with its mappings/options.
 
-Before replacing a pane buffer, `set_review_buffer()` disables native diff on the old participant and restores its owned presentation. Neovim can retain hidden buffers in the tab's diff comparison after a window switches buffers, coloring unchanged lines and corrupting alignment. Validate actual content and unchanged-line highlighting, not just two `diff=true` window options.
+Before replacing a pane buffer, `set_review_buffer()` in [buffers.lua](../lua/diffreel/buffers.lua) disables native diff on the old participant and restores its owned presentation. Neovim can retain hidden buffers in the tab's diff comparison after a window switches buffers, coloring unchanged lines and corrupting alignment. Validate actual content and unchanged-line highlighting, not just two `diff=true` window options.
 
 Virtual names stay stable for the view; `b:diffreel_root` and `b:diffreel_path` carry selection metadata. Repeated renaming creates alternate-name buffers even with `keepalt`; repeated open/close must not accumulate them. Stop Tree-sitter state when changing languages so plain text does not inherit an old highlighter.
 
