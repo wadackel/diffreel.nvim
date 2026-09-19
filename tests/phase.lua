@@ -20,23 +20,38 @@ test("each transition writes exactly its flag tuple", function()
     { "answered", nil, { switching = false } },
     { "received", nil, { switching = false, ready = false, selection_pending = false } },
     { "selecting", nil, { ready = false, selection_pending = true, navigation = false } },
-    { "ready", nil, { ready = true, selection_pending = false } },
+    { "ready", nil, { ready = true, selection_pending = false }, { "error" } },
     { "empty", nil, { ready = true, selection_pending = false } },
     { "paused", nil, { navigation = true } },
     { "resumed", nil, { navigation = false, ready = false, selection_pending = false } },
     { "failed", "blob read failed", { error = "blob read failed", selection_pending = false } },
     { "stopped", "daemon exited", { error = "daemon exited", updating = false } },
-    { "retrying", nil, { updating = true } },
+    { "retrying", nil, { updating = true }, { "error" } },
     { "closing", nil, { closing = true } },
     { "reopened", nil, { closing = false } },
     { "disposed", nil, { alive = false } },
   }
+  local seed = {
+    selected_path = "keep",
+    comparison = { comparison_id = "keep" },
+    alive = "seed",
+    ready = "seed",
+    error = "seed",
+    updating = "seed",
+    switching = "seed",
+    closing = "seed",
+    navigation = "seed",
+    selection_pending = "seed",
+  }
   for _, case in ipairs(expectations) do
-    local name, detail, expected = case[1], case[2], case[3]
-    local view = { selected_path = "keep", comparison = { comparison_id = "keep" } }
+    local name, detail, expected, cleared = case[1], case[2], case[3], case[4] or {}
+    local view = vim.deepcopy(seed)
     phase.enter(view, name, detail)
-    expected.selected_path, expected.comparison = "keep", { comparison_id = "keep" }
-    eq(expected, view, name .. ": ")
+    local wanted = vim.tbl_extend("force", vim.deepcopy(seed), expected)
+    for _, field in ipairs(cleared) do
+      wanted[field] = nil
+    end
+    eq(wanted, view, name .. ": ")
   end
 end)
 
