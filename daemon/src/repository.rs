@@ -666,7 +666,8 @@ impl Repository {
         if !stat.is_file() {
             return Ok(Side::limited("directory", "040000", stat.len()));
         }
-        let mode = if stat.mode() & 0o111 != 0 {
+        // Git records a file as executable from the owner bit alone; group or other bits do not count.
+        let mode = if stat.mode() & 0o100 != 0 {
             "100755"
         } else {
             "100644"
@@ -1413,6 +1414,38 @@ mod tests {
             .handle("comparison/refresh", &json!({"comparison_id":id}))
             .unwrap();
         assert_eq!(snapshot["entries"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn only_the_owner_execute_bit_marks_worktree_files_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        git(root.path(), &["init", "-q"]);
+        for name in ["group.txt", "owner.txt"] {
+            fs::write(root.path().join(name), "one\n").unwrap();
+        }
+        git(root.path(), &["add", "."]);
+        git(root.path(), &["commit", "-qm", "one"]);
+        for (name, mode) in [("group.txt", 0o654), ("owner.txt", 0o744)] {
+            fs::write(root.path().join(name), "two\n").unwrap();
+            fs::set_permissions(root.path().join(name), fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let raw = git(root.path(), &["diff", "--raw"]);
+        assert!(
+            raw.contains(":100644 100644 ") && raw.contains(":100644 100755 "),
+            "{raw}"
+        );
+        let mut repo = Repository::new(root.path(), 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        let snapshot = repo
+            .handle("comparison/open", &json!({"view_id":"modes"}))
+            .unwrap();
+        let entries = snapshot["entries"].as_array().unwrap();
+        let mode = |path: &str| {
+            entries.iter().find(|entry| entry["path"] == path).unwrap()["right"]["mode"].clone()
+        };
+        assert_eq!(mode("group.txt"), "100644");
+        assert_eq!(mode("owner.txt"), "100755");
     }
 
     #[test]
