@@ -111,7 +111,7 @@ Use `just build` and the applicable rows below inside `nix develop`. All Lua fil
 | Changed behavior | Focused checks |
 |---|---|
 | Content, metadata, Git discovery | `unit.lua`, `repository.lua`, `content_cases.lua`, `repository_modes.lua`; Rust tests |
-| Daemon lifecycle, retry, stale startup | `startup.lua`, `crash.lua`, `ui_restart.lua`, `daemon_shutdown.ts`; stability `worker-crash`, `git-failure` |
+| Daemon lifecycle, retry, stale startup | `startup.lua`, `startup_error.lua`, `crash.lua`, `ui_restart.lua`, `daemon_shutdown.ts`; stability `worker-crash`, `git-failure` |
 | Monitoring and comparison invalidation | `watcher.lua`, `regressions.lua`, `repository.lua`; stability `mixed-updates`, `multiple-comparisons`, `rename-reappear`, `ignore-change` |
 | Explorer hierarchy, folding, path copies | `tree_actions.lua`, `tree_display_cache.lua`, `tree_clipboard.lua`, `tree_clipboard_command.lua`, `tree_ui.lua`; stability `tree-navigation`; exploratory `tree-type-change` |
 | Commands, selection, tab/window lifecycle | `ui.lua`, `ui_edges.lua`, `ui_races.lua`, `lifetime.lua`, `exploration.lua`, `autocmd_lifecycle.lua`, `selection_viewport.lua`; stability `toggle`, `tree-navigation`, `rapid-selection`, `rapid-open-close`, `move-right-tab`, `move-clone-tab` |

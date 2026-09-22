@@ -498,12 +498,21 @@ fn run() -> Result<()> {
         println!("{}", jobs.clear()?);
         return Ok(());
     }
-    serve(
+    let served = serve(
         &root.ok_or("--root is required")?,
         watch,
         Duration::from_millis(interval),
         max_bytes,
-    )
+    );
+    if let Err(error) = &served {
+        // The client only sees stdout; stderr goes to the editor's LSP log, so without this
+        // the view can only report that the backend closed.
+        let _ = rpc::write_message(
+            &mut std::io::stdout(),
+            &json!({"jsonrpc": "2.0", "method": "daemon/failed", "params": {"message": error.to_string()}}),
+        );
+    }
+    served
 }
 
 fn main() {

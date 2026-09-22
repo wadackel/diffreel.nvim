@@ -23,7 +23,9 @@ function Backend.new(opts, notify)
   end
   self.rpc = vim.lsp.rpc.start(command, {
     notification = function(method, params)
-      if not self.closed then
+      if method == "daemon/failed" then
+        self.last_error = params.message
+      elseif not self.closed then
         self.notify(method, params)
       end
     end,
