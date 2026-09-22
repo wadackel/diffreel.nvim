@@ -2,6 +2,7 @@ vim.opt.rtp:prepend(vim.fn.getcwd())
 local root = vim.fn.tempname() .. " repo"
 vim.fn.mkdir(root .. "/src", "p")
 vim.fn.writefile({ "base" }, root .. "/src/a file.lua")
+vim.fn.writefile({ "base" }, root .. "/src/[x]%#\\.lua")
 local function git(args)
   local command = {
     "git",
@@ -40,6 +41,14 @@ local ok, err = xpcall(function()
   assert(#calls == 0, "Flag completion spawned Git")
   assert(vim.tbl_contains(complete("src/a", "-- "), "src/a\\ file.lua"))
   assert(vim.tbl_contains(complete("--selected-file=src/a"), "--selected-file=src/a\\ file.lua"))
+  local special = complete("--file=src/[")
+  assert(vim.deep_equal(special, { "--file=src/[x]%#\\\\.lua" }), vim.inspect(special))
+  local received
+  vim.api.nvim_create_user_command("DiffreelCompletionArgs", function(args)
+    received = args.fargs
+  end, { nargs = "*" })
+  vim.cmd("DiffreelCompletionArgs " .. special[1] .. " -- " .. complete("src/a", "-- ")[1])
+  assert(vim.deep_equal(received, { "--file=src/[x]%#\\.lua", "--", "src/a file.lua" }), vim.inspect(received))
   assert(#calls == 0, "Path completion spawned Git")
   complete("fea")
   assert(#calls == 1 and calls[1][2] == "for-each-ref")
