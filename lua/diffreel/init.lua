@@ -56,6 +56,11 @@ local function command_complete(lead, command, position)
   return completion.complete(lead, command, position, view and view.root)
 end
 
+local function realpath(path)
+  local resolved, err = vim.uv.fs_realpath(path)
+  return assert(resolved, "diffreel: " .. tostring(err))
+end
+
 -- A raised error would show a Lua traceback for a mistyped argument; echoing it as an error
 -- still fails the command for callers such as pcall(vim.cmd, ...).
 local function user_command(name, callback, opts)
@@ -744,7 +749,7 @@ function M.open(opts)
   assert(root, "diffreel: current file is not in a Git repository")
   root = vim.fs.root(root, { ".git" }) or root
   local pinned_path = requested_file and options.preferred_path(root, nil, requested_file)
-  root = assert(vim.uv.fs_realpath(root))
+  root = realpath(root)
   root = vim.fs.root(root, { ".git" }) or root
   if requested_file then
     pinned_path = pinned_path or options.preferred_path(root, nil, requested_file)
@@ -1760,7 +1765,7 @@ function M.setup(opts)
       or vim.fs.root(vim.api.nvim_buf_get_name(0), { ".git" })
       or vim.fs.root(vim.fn.getcwd(), { ".git" })
     assert(root, "diffreel: current file is not in a Git repository")
-    root = assert(vim.uv.fs_realpath(vim.fs.root(root, { ".git" }) or root))
+    root = realpath(vim.fs.root(root, { ".git" }) or root)
     local manager = M.managers[root]
     local function cleared(err, value)
       vim.notify(

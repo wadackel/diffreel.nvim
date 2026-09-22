@@ -114,6 +114,8 @@ test("invalid command arguments are reported without a Lua traceback", function(
     ["Diffreel a b c"] = "diffreel: usage: Diffreel",
     ["DiffreelLayout bogus"] = "diffreel: invalid layout",
     ["DiffreelPRCacheClear HEAD"] = "diffreel: PRCacheClear accepts only --repo/-C",
+    ["Diffreel --repo=/nonexistent/diffreel"] = "diffreel: ENOENT",
+    ["DiffreelPRCacheClear --repo=/nonexistent/diffreel"] = "diffreel: ENOENT",
   }) do
     local ok, err = pcall(vim.cmd, command)
     assert(not ok, command .. " succeeded")
