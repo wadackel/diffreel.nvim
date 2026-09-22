@@ -115,7 +115,9 @@ local function files(root, lead, prefix)
     if not absolute then
       path = path:sub(#root:gsub("/$", "") + 2)
     end
-    result[#result + 1] = (prefix or "") .. vim.fn.fnameescape(path)
+    -- Command <f-args> only unescape whitespace and backslashes; fnameescape() would leave
+    -- literal backslashes before characters such as [, % and #.
+    result[#result + 1] = (prefix or "") .. path:gsub("[\\%s]", "\\%0")
   end
   return result
 end
