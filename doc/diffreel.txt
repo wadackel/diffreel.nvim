@@ -142,8 +142,9 @@ repository. This file is the reference for commands, options, and Lua APIs.
 
 :DiffreelLayout [side_by_side|stacked|inline]                     *:DiffreelLayout*
     Change the current tab's review layout. Without an argument, cycle
-    side_by_side -> stacked -> inline -> side_by_side. Works from extra splits;
-    does nothing in an ordinary tab. See |diffreel-inline| for inline limits.
+    side_by_side -> stacked -> inline -> side_by_side, skipping inline while
+    its requirements are unmet. Works from extra splits; does nothing in an
+    ordinary tab. See |diffreel-inline| for inline limits.
 
 :DiffreelInstall                                                *:DiffreelInstall*
     Prepare the managed daemon for the installed plugin's build ID and host
@@ -1129,7 +1130,8 @@ set_layout([{view}], {mode})                               *diffreel.set_layout(
     Use |DiffreelLayoutChanged| and |DiffreelReady| to observe completion.
 
 cycle_layout([{view}])                                   *diffreel.cycle_layout()*
-    Cycle the three diff layouts. Default: current tab's review.
+    Cycle the three diff layouts, skipping inline while it is unsupported.
+    Default: current tab's review.
 
 set_explorer([{view}], {settings})                       *diffreel.set_explorer()*
     Merge |diffreel-explorer| fields into this view and apply the layout.

@@ -200,7 +200,7 @@ A count includes up to that many nonempty hunks in the same file. For example, `
 
 ### Diff layouts
 
-Use `gL` in a review pane to cycle `side_by_side` → `stacked` → `inline`. Choose a layout directly with `:DiffreelLayout stacked`; argument-free `:DiffreelLayout` also cycles. New reviews accept `--layout=inline`, including with `--pr` and `--file`.
+Use `gL` in a review pane to cycle `side_by_side` → `stacked` → `inline`. The cycle skips `inline` while its [requirements](#inline-compatibility-and-limits) are unmet. Choose a layout directly with `:DiffreelLayout stacked`; argument-free `:DiffreelLayout` also cycles. New reviews accept `--layout=inline`, including with `--pr` and `--file`.
 
 | Layout | Display |
 |---|---|
