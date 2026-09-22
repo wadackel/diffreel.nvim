@@ -40,7 +40,7 @@ Argument-free `:Diffreel` closes a valid diffreel view in the current tab or ope
 
 [backend/rust.lua](../lua/diffreel/backend/rust.lua) uses `vim.lsp.rpc.start` for JSON-RPC 2.0 over stdio with Content-Length framing. This reuses transport, not an LSP client attached to virtual files. [rpc.rs](../daemon/src/rpc.rs) handles framing, [main.rs](../daemon/src/main.rs) serializes repository work/events, and `Repository::handle` dispatches methods.
 
-Keep daemon stdout exclusively for framed RPC; diagnostics go to stderr so they cannot corrupt message boundaries.
+Keep daemon stdout exclusively for framed RPC; diagnostics go to stderr so they cannot corrupt message boundaries. Neovim sends a spawned server's stderr only to its LSP log, so a daemon that stops serving (for example, because the root is not a Git repository) also sends its reason as a final `daemon/failed` notification; the client reports that message instead of a closed backend.
 
 The client closes the backend when a request waits 120 seconds. Requests queue behind reconciliation on the repository loop, and one reconciliation runs several Git commands that may each take up to 30 seconds, so a shorter deadline would stop healthy large-repository views. Each loop iteration drains queued requests and filesystem events for up to about 50 ms before running at most one batch, so a backlog becomes one batch instead of one batch per queued event; a request normally waits for the reconciliation already in progress. Responses, PR job output and notifications raised by a request are written before the next queued request is handled.
 
