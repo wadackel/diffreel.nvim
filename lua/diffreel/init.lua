@@ -1111,7 +1111,12 @@ function M.cycle_layout(view)
     return
   end
   local modes = { side_by_side = "stacked", stacked = "inline", inline = "side_by_side" }
-  return M.set_layout(view, modes[view.requested_layout or (view.layout_pending and "inline") or view.layout])
+  local mode = modes[view.requested_layout or (view.layout_pending and "inline") or view.layout]
+  -- Requesting unsupported inline would raise on every cycle and strand the view in stacked.
+  if mode == "inline" and not inline.check(view) then
+    mode = "side_by_side"
+  end
+  return M.set_layout(view, mode)
 end
 
 rebuild_inline = function(view)

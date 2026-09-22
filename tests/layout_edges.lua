@@ -124,6 +124,16 @@ test("unsupported inline requests are atomic", function()
   local tabs, buffers = #vim.api.nvim_list_tabpages(), #vim.api.nvim_list_bufs()
   assert(not pcall(plugin.open, { root = root, layout = "inline" }))
   assert(#vim.api.nvim_list_tabpages() == tabs and #vim.api.nvim_list_bufs() == buffers)
+  local cycled = {}
+  for _ = 1, 3 do
+    plugin.cycle_layout(v)
+    ready(v)
+    cycled[#cycled + 1] = v.layout
+  end
+  assert(vim.deep_equal(cycled, { "stacked", "side_by_side", "stacked" }), vim.inspect(cycled))
+  vim.opt.diffopt:remove("icase")
+  plugin.set_layout(v, "side_by_side")
+  ready(v)
 end)
 test("API capability failure does not create a view", function()
   local set = vim.api.nvim__ns_set
