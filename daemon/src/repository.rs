@@ -438,28 +438,30 @@ impl Repository {
         if revision.contains('\0') {
             return Err("Invalid revision".into());
         }
-        let spec = format!("{revision}^{{commit}}");
-        if (revision.len() == 40 || revision.len() == 64)
+        let resolved = if (revision.len() == 40 || revision.len() == 64)
             && revision.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
-            let oid = gix::hash::ObjectId::from_hex(revision.as_bytes())?;
-            let kind = self.git.find_header(oid)?.kind();
-            if kind != gix::objs::Kind::Commit && kind != gix::objs::Kind::Tag {
-                return Err("Invalid commit OID".into());
-            }
-            return Ok(self
-                .git
-                .find_object(oid)?
-                .peel_to_commit()?
-                .id()
-                .to_string());
+            revision.to_string()
+        } else {
+            // Appending ^{commit} would become part of the regex in a :/<text> search.
+            String::from_utf8(self.command(
+                &["rev-parse", "--verify", "--end-of-options", revision],
+                "resolve",
+            )?)?
+            .trim()
+            .into()
+        };
+        let oid = gix::hash::ObjectId::from_hex(resolved.as_bytes())?;
+        let kind = self.git.find_header(oid)?.kind();
+        if kind != gix::objs::Kind::Commit && kind != gix::objs::Kind::Tag {
+            return Err("Revision does not name a commit".into());
         }
-        Ok(String::from_utf8(self.command(
-            &["rev-parse", "--verify", "--end-of-options", &spec],
-            "resolve",
-        )?)?
-        .trim()
-        .into())
+        Ok(self
+            .git
+            .find_object(oid)?
+            .peel_to_commit()?
+            .id()
+            .to_string())
     }
 
     pub fn tree_entry(&self, revision: &str, path: &str) -> Result<Option<(String, String)>> {
@@ -1447,6 +1449,37 @@ mod tests {
             .unwrap();
         assert_eq!(snapshot["right"], second);
         assert_eq!(snapshot["entries"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn message_search_and_annotated_tag_revisions_resolve_to_commits() {
+        let root = tempfile::tempdir().unwrap();
+        git(root.path(), &["init", "-q"]);
+        std::fs::write(root.path().join("a.txt"), "first\n").unwrap();
+        git(root.path(), &["add", "."]);
+        git(root.path(), &["commit", "-qm", "first fix"]);
+        let first = git(root.path(), &["rev-parse", "HEAD"]);
+        git(root.path(), &["tag", "-am", "release", "v1"]);
+        std::fs::write(root.path().join("a.txt"), "second\n").unwrap();
+        git(root.path(), &["commit", "-qam", "second"]);
+        let mut repo = Repository::new(root.path(), 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        for (index, revision) in [":/first", "v1", "HEAD^{/first}"].into_iter().enumerate() {
+            let snapshot = repo
+                .handle(
+                    "comparison/open",
+                    &json!({"left":revision,"right":"HEAD","view_id":format!("view-{index}")}),
+                )
+                .unwrap();
+            assert_eq!(snapshot["left"], first, "{revision}");
+        }
+        assert!(
+            repo.handle(
+                "comparison/open",
+                &json!({"left":"HEAD:a.txt","view_id":"blob"}),
+            )
+            .is_err()
+        );
     }
 
     #[test]
