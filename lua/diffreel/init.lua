@@ -13,6 +13,7 @@ local panel = require("diffreel.panel")
 local popup = require("diffreel.popup")
 local full_name = require("diffreel.full_name")
 local hunks = require("diffreel.hunks")
+local binding = require("diffreel.binding")
 local pr = require("diffreel.pr")
 local layout = require("diffreel.layout")
 local windows = require("diffreel.windows")
@@ -1963,6 +1964,12 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd("WinScrolled", {
     group = group,
     callback = function()
+      local scrolled = vim.v.event
+      for _, view in pairs(M.views) do
+        if valid(view) and view.layout ~= "inline" and not view.layout_changing then
+          binding.follow(view, scrolled)
+        end
+      end
       vim.schedule(function()
         for _, view in pairs(M.views) do
           if
