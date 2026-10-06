@@ -31,7 +31,7 @@ flowchart LR
 | View | Each review tab owns selection, transition counters, windows, and virtual buffers. Backend subscriptions carry visibility so hidden views need no periodic work. |
 | Real working-tree buffer | Shared with ordinary windows and possibly other views. [lease.lua](../lua/diffreel/lease.lua) borrows mappings/options; diffreel does not own the user's text. |
 | Window presentation | [presentation.lua](../lua/diffreel/presentation.lua) records original/installed options per view, window, and buffer, including hidden buffers' cached window settings. |
-| Pane binding | [binding.lua](../lua/diffreel/binding.lua) makes native scrollbind realign the peer pane with a window whose view changed outside a top-level Normal command. |
+| Pane binding | [binding.lua](../lua/diffreel/binding.lua) makes native scrollbind realign the peer pane with a window whose view changed outside a top-level Normal command: an API hunk landing, or a mouse scroll over a pane that does not have focus. |
 
 Argument-free `:Diffreel` closes a valid diffreel view in the current tab or opens HEAD → worktree. Explicit arguments/options and the Lua `open()` API create a view. A literal left `HEAD` with right `worktree` or `:0` (index) follows HEAD; other revision expressions resolve once. Merge-base comparisons freeze their resolved commit endpoints. `resolved_spec` carries fixed OIDs and scope options across restart and omits merge-base resolution, preventing a moved branch from changing the baseline. HEAD transitions open a new comparison without changing unrelated fixed views.
 

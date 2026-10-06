@@ -54,6 +54,7 @@ export function commandsFor(
       "inline_ui",
       "explorer_resize",
       "full_name_ui",
+      "pane_binding_ui",
       "e2e",
     ]
   ) {
