@@ -26,6 +26,7 @@ The GitHub repository is `wadackel/diffreel.nvim`, the plugin name is `diffreel.
 | Keymap configuration and operations | [lua/diffreel/keymaps.lua](lua/diffreel/keymaps.lua) |
 | Shared real-buffer mappings and options | [lua/diffreel/lease.lua](lua/diffreel/lease.lua) |
 | Window styling, folds, option restoration | [lua/diffreel/presentation.lua](lua/diffreel/presentation.lua) |
+| Scroll alignment between the diff panes | [lua/diffreel/binding.lua](lua/diffreel/binding.lua) |
 | Explorer rows and display paths | [lua/diffreel/explorer.lua](lua/diffreel/explorer.lua) |
 | Rust transport and daemon | [lua/diffreel/backend/rust.lua](lua/diffreel/backend/rust.lua), [daemon/src](daemon/src) |
 | Daemon installation and distribution | [install.lua](lua/diffreel/install.lua), [distribution.lua](lua/diffreel/distribution.lua), [scripts](scripts), [.github/workflows/ci.yaml](.github/workflows/ci.yaml) |

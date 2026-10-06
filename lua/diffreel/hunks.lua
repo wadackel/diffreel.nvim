@@ -1,4 +1,5 @@
 local M = {}
+local binding = require("diffreel.binding")
 local windows = require("diffreel.windows")
 local inline = require("diffreel.inline")
 local phase = require("diffreel.phase")
@@ -52,6 +53,7 @@ end
 
 function M.place(view, win, row)
   vim.api.nvim_win_set_cursor(win, { row, 0 })
+  binding.align(win)
   if view.layout == "inline" and win == view.right_win then
     inline.reveal_start(view)
   end
