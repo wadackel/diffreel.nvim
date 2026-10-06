@@ -30,10 +30,17 @@ async function main() {
   await git(root, "init", "-qb", "main");
   write(join(root, "a.txt"), content("old"));
   write(join(root, "b.txt"), content("old"));
+  write(
+    join(root, "c.txt"),
+    content("old").split("\n").map((line) =>
+      line.startsWith("old") ? line.slice(0, 7) : line
+    ).join("\n"),
+  );
   await git(root, "add", ".");
   await git(root, "commit", "-qm", "base");
   write(join(root, "a.txt"), content("new"));
   write(join(root, "b.txt"), content("new", ["added", "added", "added"]));
+  write(join(root, "c.txt"), content("new"));
   const nvim = await Nvim.create(root, { columns: 140, rows: 40 });
   const views = () =>
     nvim.lua<Record<string, number>[]>(`
@@ -73,7 +80,7 @@ async function main() {
     }
   };
   // The right side of b.txt holds three more lines above the scrolled region.
-  const bound = async (label: string, offset: number, moved: string) => {
+  const bound = async (label: string, offset: number, moved?: string) => {
     await nvim.wait(
       `
       local left = vim.api.nvim_win_call(v.left_win, vim.fn.winsaveview)
@@ -88,6 +95,7 @@ async function main() {
         }\n${error.message}`,
       );
     });
+    if (!moved) return;
     const [left, right] = await views();
     const source = moved === "left" ? left : right;
     if (source.topline === 1 && source.leftcol === 0) {
@@ -134,6 +142,28 @@ async function main() {
           );
         }
       }
+    }
+    for (const layout of ["side_by_side", "stacked"]) {
+      await nvim.lua("plugin.set_layout(v, ...)", layout);
+      await settled();
+      await select("a.txt");
+      await select("c.txt");
+      await nvim.lua("vim.api.nvim_set_current_win(v.right_win)");
+      for (const keys of ["7G$", "j", "k0", "200|", "j", "7G$"]) {
+        await nvim.request("nvim_input", keys);
+        await bound(
+          `${layout}, uneven lines, ${keys}`,
+          0,
+          keys === "k0" ? undefined : "right",
+        );
+      }
+      await nvim.lua("vim.api.nvim_set_current_win(v.left_win)");
+      await nvim.request("nvim_input", "zL");
+      await bound(`${layout}, uneven lines, short side`, 0, "left");
+      await nvim.lua("vim.api.nvim_set_current_win(v.right_win)");
+      await nvim.request("nvim_input", "$");
+      await bound(`${layout}, uneven lines, back on the long side`, 0, "right");
+      assertEquals((await views())[1].leftcol > 100, true);
     }
     await nvim.lua("vim.api.nvim_set_current_win(v.right_win)");
     await select("a.txt");

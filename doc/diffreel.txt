@@ -221,6 +221,8 @@ panes from the first line; a revisit does not restore the old position.
 Refreshing, editing or saving the selected file keeps the current position.
 Scrolling either diff pane with the mouse moves the other pane with it, even
 while another pane or the explorer has focus.
+Both panes keep the same horizontal offset even where a changed line is
+shorter on one side.
 
 The README's <Leader>gD mapping is an example global toggle; setup() does not
 install it. Configure your leader before setup. Mappings on real buffers
