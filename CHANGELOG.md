@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.1](https://github.com/wadackel/diffreel.nvim/compare/v0.1.0...v0.1.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* complete paths that contain [, % or # as literal arguments ([#34](https://github.com/wadackel/diffreel.nvim/issues/34)) ([61220c6](https://github.com/wadackel/diffreel.nvim/commit/61220c68ecad39f733046ac39ac0fa61084646af))
+* correct review headers, command errors and PR cache completion ([#23](https://github.com/wadackel/diffreel.nvim/issues/23)) ([1226345](https://github.com/wadackel/diffreel.nvim/commit/1226345e3eae8e404ceed5de3c5ecc618949282d))
+* keep one horizontal offset when a changed line is shorter on one side ([#39](https://github.com/wadackel/diffreel.nvim/issues/39)) ([8f95f9f](https://github.com/wadackel/diffreel.nvim/commit/8f95f9f3d9a9cee6fc952c77a21e8f34d72e98ba))
+* keep the peer pane aligned after [H and ]H ([#37](https://github.com/wadackel/diffreel.nvim/issues/37)) ([8156c2c](https://github.com/wadackel/diffreel.nvim/commit/8156c2c450d11562cd91254c4bee53597898eb37))
+* report inaccessible repository paths without a Lua traceback ([#31](https://github.com/wadackel/diffreel.nvim/issues/31)) ([2854e5f](https://github.com/wadackel/diffreel.nvim/commit/2854e5fdc027c9ac6a22bcaaf731671e095999d3))
+* resolve :/&lt;text&gt; revision searches ([#33](https://github.com/wadackel/diffreel.nvim/issues/33)) ([8652022](https://github.com/wadackel/diffreel.nvim/commit/86520227699e2d060fcad170c96e74e26b1d6bda))
+* return focus to the explorer when toggling it back ([#25](https://github.com/wadackel/diffreel.nvim/issues/25)) ([5c9c8e9](https://github.com/wadackel/diffreel.nvim/commit/5c9c8e9a1c78b921c5b52507df7794244795b1a4))
+* scroll both diff panes when the mouse scrolls an unfocused one ([#38](https://github.com/wadackel/diffreel.nvim/issues/38)) ([a38bef9](https://github.com/wadackel/diffreel.nvim/commit/a38bef93c1bcfb1d12c4b1f13f6055346cfd6cef))
+* show why the daemon stopped instead of "Backend is closed" ([#32](https://github.com/wadackel/diffreel.nvim/issues/32)) ([aa4e56b](https://github.com/wadackel/diffreel.nvim/commit/aa4e56b623789fff0799e125e872fbd0c9a938f2))
+* skip unsupported inline when cycling layouts ([#36](https://github.com/wadackel/diffreel.nvim/issues/36)) ([ad27283](https://github.com/wadackel/diffreel.nvim/commit/ad27283d060ec0031a0fcb53795682ca8360c320))
+* treat only the owner execute bit as an executable worktree file ([#35](https://github.com/wadackel/diffreel.nvim/issues/35)) ([cb81a6a](https://github.com/wadackel/diffreel.nvim/commit/cb81a6ac48445a3679431a76a4ac17829c5588d8))
+
 ## 0.1.0 (2026-09-18)
 
 
