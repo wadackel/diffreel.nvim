@@ -25,6 +25,23 @@ local function position(win)
   return { view.topline, view.topfill, view.leftcol }
 end
 
+-- Native cursorbind puts the peer's cursor on the matching line, and a peer whose line is shorter scrolls
+-- back to that cursor after scrollbind has copied the column offset. The peer can end where it started, so
+-- its own scroll event is not a reliable sign.
+local function level(view, current)
+  local peer = current == view.left_win and view.right_win or view.left_win
+  if not vim.wo[peer].scrollbind or not vim.wo[current].scrollbind then
+    return
+  end
+  local leftcol = vim.api.nvim_win_call(current, vim.fn.winsaveview).leftcol
+  if vim.api.nvim_win_call(peer, vim.fn.winsaveview).leftcol ~= leftcol then
+    vim.api.nvim_win_call(peer, function()
+      vim.fn.winrestview({ leftcol = leftcol })
+    end)
+    view.aligned = { win = peer, position = position(peer) }
+  end
+end
+
 -- Native scrollbind follows only the current window, so a pane scrolled by the mouse while another window
 -- has focus leaves its peer behind. A pane whose view moved for another reason, such as replaced content,
 -- must not drag the pane the user is reading.
@@ -38,6 +55,10 @@ function M.follow(view, scrolled)
       and not (echo and echo.win == win and vim.deep_equal(echo.position, position(win)))
   end
   local left, right = moved(view.left_win), moved(view.right_win)
+  local current = vim.api.nvim_get_current_win()
+  if (left and current == view.left_win) or (right and current == view.right_win) then
+    level(view, current)
+  end
   if left == right then
     return
   end
