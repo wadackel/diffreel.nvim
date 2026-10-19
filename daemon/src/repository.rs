@@ -2028,10 +2028,11 @@ mod tests {
         fs::write(root.path().join("a.txt"), "base\n").unwrap();
         git(root.path(), &["add", "."]);
         git(root.path(), &["commit", "-qm", "base"]);
-        let directory = "d".repeat(200);
-        fs::create_dir(root.path().join(&directory)).unwrap();
-        let names = (0..12000)
-            .map(|i| format!("{directory}/{i:05}-{}", "x".repeat(40)))
+        // Linux caps argv at 6 MiB whatever the stack limit, so the paths must exceed that too.
+        let directory = ["d", "e", "f"].map(|name| name.repeat(250)).join("/");
+        fs::create_dir_all(root.path().join(&directory)).unwrap();
+        let names = (0..9000)
+            .map(|i| format!("{directory}/{i:05}"))
             .collect::<Vec<_>>();
         for name in &names {
             File::create(root.path().join(name)).unwrap();
