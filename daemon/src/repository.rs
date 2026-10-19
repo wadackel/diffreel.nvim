@@ -195,6 +195,38 @@ impl Repository {
         self.run_git_paths(args, reason, stdin, true)
     }
 
+    fn run_git_batches(
+        &mut self,
+        args: &[String],
+        paths: &[String],
+        reason: &str,
+    ) -> Result<Vec<u8>> {
+        // These commands lack --pathspec-from-file, and macOS shares its 1 MiB ARG_MAX with the
+        // environment, so discovered paths are split into argv batches well below it.
+        const BATCH_BYTES: usize = 131072;
+        let mut output = Vec::new();
+        let mut rest = paths;
+        loop {
+            let mut size = 0;
+            let count = rest
+                .iter()
+                .position(|path| {
+                    size += path.len() + 1 + std::mem::size_of::<usize>();
+                    size > BATCH_BYTES
+                })
+                .unwrap_or(rest.len())
+                .max(1.min(rest.len()));
+            let (batch, tail) = rest.split_at(count);
+            let mut command = args.to_vec();
+            command.extend_from_slice(batch);
+            output.extend(self.run_git(&command, reason, None)?);
+            rest = tail;
+            if rest.is_empty() {
+                return Ok(output);
+            }
+        }
+    }
+
     fn run_git_paths(
         &mut self,
         args: &[String],
@@ -407,11 +439,13 @@ impl Repository {
         .into_iter()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-        if let Some(paths) = paths {
+        let raw = if let Some(paths) = paths {
             args.push("--".into());
-            args.extend_from_slice(paths);
-        }
-        let value = model::parse_status(&self.run_git(&args, reason, None)?)?;
+            self.run_git_batches(&args, paths, reason)?
+        } else {
+            self.run_git(&args, reason, None)?
+        };
+        let value = model::parse_status(&raw)?;
         self.set_head(value.head);
         if let Some(paths) = paths {
             for path in paths {
@@ -591,9 +625,8 @@ impl Repository {
                 .or_default()
                 .insert(item[1].clone(), item[2].clone());
         }
-        let mut args = vec!["ls-files".into(), "-t".into(), "-z".into(), "--".into()];
-        args.extend(needed.iter().cloned());
-        let records = model::names(&self.run_git(&args, reason, None)?)?;
+        let args = ["ls-files", "-t", "-z", "--"].map(str::to_owned);
+        let records = model::names(&self.run_git_batches(&args, &needed, reason)?)?;
         for path in &needed {
             self.tracked.remove(path);
         }
@@ -816,17 +849,15 @@ impl Repository {
                     }
                 }
                 args.push("--".into());
-                if let Some(paths) = paths {
-                    args.extend_from_slice(paths);
+                // Batching would hide renames that cross batches from -M, so only the
+                // --no-renames partial refresh is split.
+                let raw = if let Some(paths) = paths {
+                    self.run_git_batches(&args, paths, reason)?
                 } else {
                     args.extend_from_slice(&c.paths);
-                }
-                rows = model::parse_raw(&self.run_git_paths(
-                    &args,
-                    reason,
-                    None,
-                    paths.is_some() || c.paths.is_empty(),
-                )?)?;
+                    self.run_git_paths(&args, reason, None, c.paths.is_empty())?
+                };
+                rows = model::parse_raw(&raw)?;
                 for row in &rows {
                     candidates.insert(row.path.clone());
                     candidates.insert(row.old_path.clone());
@@ -1988,5 +2019,35 @@ mod tests {
             )
             .unwrap();
         assert!(resolved["entries"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn oversized_path_lists() {
+        let root = tempfile::tempdir().unwrap();
+        git(root.path(), &["init", "-q"]);
+        fs::write(root.path().join("a.txt"), "base\n").unwrap();
+        git(root.path(), &["add", "."]);
+        git(root.path(), &["commit", "-qm", "base"]);
+        let directory = "d".repeat(200);
+        fs::create_dir(root.path().join(&directory)).unwrap();
+        let names = (0..12000)
+            .map(|i| format!("{directory}/{i:05}-{}", "x".repeat(40)))
+            .collect::<Vec<_>>();
+        for name in &names {
+            File::create(root.path().join(name)).unwrap();
+        }
+        let bytes = names.iter().map(|name| name.len() + 9).sum::<usize>();
+        let limit = unsafe { libc::sysconf(libc::_SC_ARG_MAX) };
+        assert!(bytes as i64 > limit as i64, "{bytes} <= {limit}");
+        let mut repo = Repository::new(root.path(), 1048576).unwrap();
+        repo.handle("initialize", &json!({"protocol":4})).unwrap();
+        let snapshot = repo
+            .handle("comparison/open", &json!({"view_id":"large"}))
+            .unwrap();
+        assert_eq!(snapshot["entries"].as_array().unwrap().len(), names.len());
+        let id = snapshot["comparison_id"].as_str().unwrap().to_owned();
+        let snapshot = repo.refresh(&id, "paths", Some(&names)).unwrap();
+        assert!(snapshot.get("error").is_none(), "{snapshot}");
+        assert_eq!(snapshot["entries"].as_array().unwrap().len(), names.len());
     }
 }
