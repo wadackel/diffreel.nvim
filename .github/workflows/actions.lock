@@ -8,7 +8,7 @@ workflows:
         - 'actions/download-artifact@v4.3.0'
         - 'actions/upload-artifact@v4.6.2'
         - 'denoland/setup-deno@v2.0.5'
-        - 'determinatesystems/nix-installer-action@v22'
+        - 'determinatesystems/nix-installer-action@v23'
         - 'googleapis/release-please-action@v5.0.0'
         - 'nix-community/cache-nix-action@v7.0.2'
         - 'swatinem/rust-cache@v2.9.2'
@@ -40,9 +40,9 @@ dependencies:
         commit: 'sha1-22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
         owner_id: 42048915
         repo_id: 356423100
-    'determinatesystems/nix-installer-action@v22':
-        ref: 'v22'
-        commit: 'sha1-ef8a148080ab6020fd15196c2084a2eea5ff2d25'
+    'determinatesystems/nix-installer-action@v23':
+        ref: 'v23'
+        commit: 'sha1-3138316df39ed29be04236d7ffc686fa525866aa'
         owner_id: 80991770
         repo_id: 588678074
     'googleapis/release-please-action@v5.0.0':
