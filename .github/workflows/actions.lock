@@ -11,7 +11,7 @@ workflows:
         - 'determinatesystems/nix-installer-action@v22'
         - 'googleapis/release-please-action@v5.0.0'
         - 'nix-community/cache-nix-action@v7.0.2'
-        - 'swatinem/rust-cache@v2.9.2'
+        - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/verify-lockfile.yaml':
         - 'actions/checkout@v7.0.1'
 dependencies:
@@ -55,8 +55,8 @@ dependencies:
         commit: 'sha1-7df957e333c1e5da7721f60227dbba6d06080569'
         owner_id: 33221035
         repo_id: 660071037
-    'swatinem/rust-cache@v2.9.2':
-        ref: 'v2.9.2'
-        commit: 'sha1-6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
+    'swatinem/rust-cache@v2.9.3':
+        ref: 'v2.9.3'
+        commit: 'sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0'
         owner_id: 580492
         repo_id: 298565987
