@@ -117,7 +117,7 @@ jobs:
           echo "image=${ImageOS:?}-${ImageVersion:?}" >> "$GITHUB_OUTPUT"
           rustup toolchain install "$rust_version" --profile minimal
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2.9.2
+        uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: daemon -> target
           key: ${{ matrix.target }}-${{ steps.toolchain.outputs.image }}-${{ hashFiles('scripts/build-daemon.sh') }}
