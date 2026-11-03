@@ -47,7 +47,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4.4.0
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: $/.github/actions/setup-nix
@@ -60,7 +60,7 @@ jobs:
     outputs:
       build_id: ${{ steps.identity.outputs.build_id }}
     steps:
-      - uses: actions/checkout@v4.4.0
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: denoland/setup-deno@v2.0.5
@@ -95,7 +95,7 @@ jobs:
       BUILD_ID: ${{ needs.identity.outputs.build_id }}
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v4.4.0
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: denoland/setup-deno@v2.0.5
@@ -165,7 +165,7 @@ jobs:
     env:
       BUILD_ID: ${{ needs.identity.outputs.build_id }}
     steps:
-      - uses: actions/checkout@v4.4.0
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: denoland/setup-deno@v2.0.5
@@ -189,7 +189,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4.4.0
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: denoland/setup-deno@v2.0.5
@@ -225,7 +225,7 @@ jobs:
       group: plugin-release
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4.4.0
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: denoland/setup-deno@v2.0.5
