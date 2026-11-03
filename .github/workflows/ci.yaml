@@ -137,14 +137,14 @@ jobs:
         run: deno task test --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET" --jobs 2
       - name: Installation tests
         run: deno run --frozen -A tests/install_integration.ts --daemon ".wadackel/qa/dist/diffreel-daemon-$TARGET"
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: daemon-${{ matrix.target }}
           path: .wadackel/qa/dist/diffreel-daemon-${{ matrix.target }}
           include-hidden-files: true
           if-no-files-found: error
       - if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: evidence-${{ matrix.target }}
           path: .wadackel/qa/ci
@@ -206,7 +206,7 @@ jobs:
           DIFFREEL_EXPECTED_ID: ${{ needs.identity.outputs.build_id }}
         run: deno run --frozen -A tests/consumer.ts
       - if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: consumer-${{ matrix.runner }}
           path: .wadackel/qa/consumer
